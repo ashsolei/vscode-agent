@@ -1,0 +1,237 @@
+{
+  "name": "vscode-agent",
+  "displayName": "VS Code Agent",
+  "description": "En modulär agent-struktur för VS Code Chat med stöd för flera fönster",
+  "version": "0.1.0",
+  "publisher": "your-publisher",
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": [
+    "Chat"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "chatParticipants": [
+      {
+        "id": "vscode-agent.agent",
+        "fullName": "Agent",
+        "name": "agent",
+        "description": "En intelligent agent som kan hjälpa med kod, dokumentation och uppgifter",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "code",
+            "description": "Analysera och generera kod"
+          },
+          {
+            "name": "docs",
+            "description": "Sök och generera dokumentation"
+          },
+          {
+            "name": "task",
+            "description": "Hantera uppgifter och planering"
+          },
+          {
+            "name": "status",
+            "description": "Visa agentens tillstånd och konfiguration"
+          },
+          {
+            "name": "refactor",
+            "description": "Refaktorera och förbättra kodstruktur"
+          },
+          {
+            "name": "test",
+            "description": "Generera tester och teststrategier"
+          },
+          {
+            "name": "git",
+            "description": "Git-operationer och versionshantering"
+          },
+          {
+            "name": "security",
+            "description": "Säkerhetsgranskning och sårbarhetsskanning"
+          },
+          {
+            "name": "perf",
+            "description": "Prestandaanalys och optimering"
+          },
+          {
+            "name": "debug",
+            "description": "Felsökning och bugganalys"
+          },
+          {
+            "name": "review",
+            "description": "Kodgranskning och kvalitetsanalys"
+          },
+          {
+            "name": "architect",
+            "description": "Mjukvaruarkitektur och systemdesign"
+          },
+          {
+            "name": "translate",
+            "description": "Översätt kod mellan språk och ramverk"
+          },
+          {
+            "name": "deps",
+            "description": "Hantera och analysera projektberoenden"
+          },
+          {
+            "name": "explain",
+            "description": "Förklara kod och koncept pedagogiskt"
+          },
+          {
+            "name": "api",
+            "description": "API-design, endpoints och integrationer"
+          },
+          {
+            "name": "scaffold",
+            "description": "🤖 Generera hela projekt autonomt"
+          },
+          {
+            "name": "autofix",
+            "description": "🤖 Hitta och fixa alla fel automatiskt"
+          },
+          {
+            "name": "devops",
+            "description": "🤖 CI/CD, Docker, Kubernetes, infrastruktur"
+          },
+          {
+            "name": "db",
+            "description": "🤖 Databasdesign, migrationer, ORM"
+          },
+          {
+            "name": "migrate",
+            "description": "🤖 Migrera mellan ramverk och versioner"
+          },
+          {
+            "name": "component",
+            "description": "🤖 Generera kompletta UI-komponenter"
+          },
+          {
+            "name": "i18n",
+            "description": "🤖 Internationalisering och översättning"
+          },
+          {
+            "name": "plan",
+            "description": "🤖 Planera och exekvera komplexa uppgifter"
+          },
+          {
+            "name": "a11y",
+            "description": "🤖 Tillgänglighetsgranskning och autofix"
+          },
+          {
+            "name": "docgen",
+            "description": "🤖 Generera komplett projektdokumentation"
+          },
+          {
+            "name": "metrics",
+            "description": "🤖 Kodkvalitetsmetriker och analysrapport"
+          },
+          {
+            "name": "cli",
+            "description": "🤖 Skapa kompletta CLI-verktyg"
+          },
+          {
+            "name": "fullstack",
+            "description": "🤖 Bygg hela webbappar: frontend + backend + databas"
+          },
+          {
+            "name": "workflow-quality",
+            "description": "🔄 Workflow: Kodgranskning + tester + säkerhet + prestanda"
+          },
+          {
+            "name": "workflow-ship",
+            "description": "🔄 Workflow: Plan → Scaffold → Kod → Test → Docs → Review"
+          },
+          {
+            "name": "workflow-fix",
+            "description": "🔄 Workflow: Autofix → Test → Säkerhetskontroll"
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "vscode-agent.clearState",
+        "title": "Agent: Rensa delat tillstånd"
+      },
+      {
+        "command": "vscode-agent.showState",
+        "title": "Agent: Visa delat tillstånd"
+      },
+      {
+        "command": "vscode-agent.showDashboard",
+        "title": "Agent: Visa Dashboard"
+      },
+      {
+        "command": "vscode-agent.showMemory",
+        "title": "Agent: Visa minnesstatistik"
+      },
+      {
+        "command": "vscode-agent.clearMemory",
+        "title": "Agent: Rensa agentminne"
+      },
+      {
+        "command": "vscode-agent.initConfig",
+        "title": "Agent: Skapa .agentrc.json"
+      },
+      {
+        "command": "vscode-agent.toggleCodeLens",
+        "title": "Agent: Slå av/på CodeLens"
+      },
+      {
+        "command": "vscode-agent.undo",
+        "title": "Agent: Ångra senaste agent-ändring"
+      },
+      {
+        "command": "vscode-agent.refreshTree",
+        "title": "Agent: Uppdatera sidopanel",
+        "icon": "$(refresh)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "agent-sidebar",
+          "title": "Agent Explorer",
+          "icon": "$(hubot)"
+        }
+      ]
+    },
+    "views": {
+      "agent-sidebar": [
+        {
+          "id": "agentExplorer",
+          "name": "Agenter",
+          "icon": "$(hubot)",
+          "contextualTitle": "Agent Explorer"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "vscode-agent.refreshTree",
+          "when": "view == agentExplorer",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.93.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.0"
+  }
+}
