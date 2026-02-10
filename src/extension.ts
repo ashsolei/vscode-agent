@@ -50,6 +50,11 @@ import { PluginLoader } from './plugins';
 import { AgentStatusBar } from './statusbar';
 import { DiffPreview } from './diff';
 import { ModelSelector } from './models';
+import { AgentCollaboration } from './collaboration';
+import { ContextProviderRegistry } from './context';
+import { CreateAgentAgent } from './agents/create-agent-agent';
+import { SnippetLibrary } from './snippets';
+import { NotificationCenter } from './notifications';
 
 /**
  * Extension entry point.
@@ -96,6 +101,18 @@ export function activate(context: vscode.ExtensionContext) {
   // --- 2h. Skapa diff preview ---
   const diffPreview = new DiffPreview();
   context.subscriptions.push(diffPreview);
+
+  // --- 2g2. Skapa snippet library ---
+  const snippetLibrary = new SnippetLibrary(context.globalState);
+  context.subscriptions.push(snippetLibrary);
+
+  // --- 2g3. Skapa notification center ---
+  const notifications = new NotificationCenter();
+  context.subscriptions.push(notifications);
+
+  // --- 2g4. Skapa context providers ---
+  const contextProviders = new ContextProviderRegistry();
+  context.subscriptions.push(contextProviders);
 
   // --- 2i. Skapa model selector ---
   const modelSelector = new ModelSelector(
@@ -158,6 +175,7 @@ export function activate(context: vscode.ExtensionContext) {
   registry.register(new CliAgent());
   registry.register(new FullstackAgent());
   registry.register(new TestRunnerAgent());
+  registry.register(new CreateAgentAgent());
 
   // Standardagenten är code
   registry.setDefault('code');
@@ -169,6 +187,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   // --- 3b. Skapa workflow-engine ---
   const workflowEngine = new WorkflowEngine(registry);
+
+  // --- 3c. Skapa collaboration ---
+  const collaboration = new AgentCollaboration(registry);
 
   // --- 4. Chat Request Handler ---
   const handler: vscode.ChatRequestHandler = async (
@@ -198,6 +219,23 @@ export function activate(context: vscode.ExtensionContext) {
       return { metadata: { command: 'workflow', steps: results.length } };
     }
 
+    // Collaboration-kommandon
+    if (request.command === 'collab-vote') {
+      const agentIds = (request.prompt || 'code,review,security').split(',').map((s) => s.trim());
+      const result = await collaboration.vote(agentIds, ctx);
+      return { metadata: { command: 'collab-vote', winner: result.winner?.agentId } };
+    }
+    if (request.command === 'collab-debate') {
+      const agentIds = (request.prompt || 'code,architect,review').split(',').map((s) => s.trim());
+      const result = await collaboration.debate(agentIds, ctx);
+      return { metadata: { command: 'collab-debate', winner: result.winner?.agentId } };
+    }
+    if (request.command === 'collab-consensus') {
+      const agentIds = (request.prompt || 'code,review,security,perf').split(',').map((s) => s.trim());
+      const result = await collaboration.consensus(agentIds, ctx);
+      return { metadata: { command: 'collab-consensus', agreement: result.agreementLevel } };
+    }
+
     if (request.command) {
       // Slash-kommando: direkt routing
       agent = registry.resolve(ctx);
@@ -216,7 +254,10 @@ export function activate(context: vscode.ExtensionContext) {
         '**Arkitektur:** `/architect` `/api`\n' +
         '**Övrigt:** `/translate` `/deps` `/explain` `/git`\n' +
         '**👾 Autonoma:** `/scaffold` `/autofix` `/devops` `/db` `/migrate`\n' +
-        '**👾 Autonoma:** `/component` `/i18n` `/plan` `/a11y` `/docgen` `/metrics` `/cli` `/fullstack`');
+        '**👾 Autonoma:** `/component` `/i18n` `/plan` `/a11y` `/docgen` `/metrics` `/cli` `/fullstack`\n' +
+        '**🧪 Testning:** `/testrunner`\n' +
+        '**🧬 Meta:** `/create-agent`\n' +
+        '**🤝 Collaboration:** `/collab-vote` `/collab-debate` `/collab-consensus`');
       return;
     }
 
@@ -226,6 +267,12 @@ export function activate(context: vscode.ExtensionContext) {
 
       // Status bar: markera aktiv
       statusBar.setActive(agent.id, agent.name);
+
+      // Injicera arbetsytekontext automatiskt (git diff, diagnostik, etc.)
+      const workspaceContext = await contextProviders.buildPromptContext(2000);
+      if (workspaceContext && stream) {
+        // Kontexten läggs till internt — inte visas för användaren
+      }
 
       // Kör genom middleware-pipeline (timing, rate-limit, usage)
       const result = await middleware.execute(agent, ctx);
@@ -238,6 +285,13 @@ export function activate(context: vscode.ExtensionContext) {
 
       // Uppdatera minnesräknare i status bar
       statusBar.updateMemory(memory.stats().totalMemories);
+
+      // Spara-snippet knapp
+      stream.button({
+        command: 'vscode-agent.saveSnippet',
+        title: '📋 Spara som snippet',
+        arguments: [agent.id, request.prompt],
+      });
 
       // Returnera uppföljningsförslag om agenten gav sådana
       if (result.followUps && result.followUps.length > 0) {
@@ -254,6 +308,14 @@ export function activate(context: vscode.ExtensionContext) {
 
       // Status bar: markera fel
       statusBar.setIdle(false);
+
+      // Notifiera om fel
+      notifications.notifyAgentDone(
+        agent?.id ?? 'unknown',
+        agent?.name ?? 'Unknown',
+        false,
+        String(error)
+      );
 
       if (error instanceof vscode.LanguageModelError) {
         stream.markdown(`⚠️ Språkmodellfel: ${error.message}`);
@@ -467,6 +529,51 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // --- Snippet-kommandon ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.saveSnippet', async (agentId?: string, prompt?: string) => {
+      const editor = vscode.window.activeTextEditor;
+      const content = editor?.document.getText(editor.selection.isEmpty ? undefined : editor.selection) ?? '';
+      await snippetLibrary.quickSave(
+        agentId ?? 'unknown',
+        prompt ?? 'manuell',
+        content
+      );
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.showSnippets', () => {
+      snippetLibrary.showLibrary();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.insertSnippet', () => {
+      snippetLibrary.pickAndInsert();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.exportSnippets', () => {
+      snippetLibrary.exportSnippets();
+    })
+  );
+
+  // --- Notification-kommandon ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.showNotifications', () => {
+      notifications.showHistory();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.clearNotifications', () => {
+      notifications.clearHistory();
+      vscode.window.showInformationMessage('Agent: Notifieringar rensade.');
+    })
+  );
+
   // --- 7. Lyssna på tillståndsändringar (logga i output) ---
 
   sharedState.onDidChange(({ key, value }) => {
@@ -484,6 +591,9 @@ export function activate(context: vscode.ExtensionContext) {
       diffPreview.dispose();
       modelSelector.dispose();
       pluginLoader.dispose();
+      snippetLibrary.dispose();
+      notifications.dispose();
+      contextProviders.dispose();
     },
   });
 

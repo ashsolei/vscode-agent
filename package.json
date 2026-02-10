@@ -142,6 +142,22 @@
             "description": "🧪 Kör tester, analysera fel, self-correct automatiskt"
           },
           {
+            "name": "create-agent",
+            "description": "🧬 Skapa nya agenter dynamiskt med AI"
+          },
+          {
+            "name": "collab-vote",
+            "description": "🗳️ Flera agenter röstar på bästa lösningen"
+          },
+          {
+            "name": "collab-debate",
+            "description": "💬 Agenter debatterar och förbättrar varandras svar"
+          },
+          {
+            "name": "collab-consensus",
+            "description": "🤝 Syntetisera bästa svaret från flera agenter"
+          },
+          {
             "name": "workflow-quality",
             "description": "🔄 Workflow: Kodgranskning + tester + säkerhet + prestanda"
           },
@@ -205,6 +221,30 @@
       {
         "command": "vscode-agent.previewDiff",
         "title": "Agent: Förhandsgranska ändringar"
+      },
+      {
+        "command": "vscode-agent.saveSnippet",
+        "title": "Agent: Spara som snippet"
+      },
+      {
+        "command": "vscode-agent.showSnippets",
+        "title": "Agent: Visa snippet-bibliotek"
+      },
+      {
+        "command": "vscode-agent.insertSnippet",
+        "title": "Agent: Infoga snippet"
+      },
+      {
+        "command": "vscode-agent.exportSnippets",
+        "title": "Agent: Exportera snippets"
+      },
+      {
+        "command": "vscode-agent.showNotifications",
+        "title": "Agent: Visa notifieringar"
+      },
+      {
+        "command": "vscode-agent.clearNotifications",
+        "title": "Agent: Rensa notifieringar"
       }
     ],
     "viewsContainers": {
