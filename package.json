@@ -3,12 +3,23 @@
   "displayName": "VS Code Agent",
   "description": "En modulär agent-struktur för VS Code Chat med stöd för flera fönster",
   "version": "0.1.0",
-  "publisher": "your-publisher",
+  "publisher": "ashsolei",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ashsolei/vscode-agent"
+  },
+  "homepage": "https://github.com/ashsolei/vscode-agent#readme",
+  "bugs": {
+    "url": "https://github.com/ashsolei/vscode-agent/issues"
+  },
+  "icon": "media/icon.png",
   "engines": {
     "vscode": "^1.93.0"
   },
   "categories": [
-    "Chat"
+    "Chat",
+    "Other"
   ],
   "activationEvents": [],
   "main": "./out/extension.js",
@@ -318,20 +329,243 @@
           "group": "navigation"
         }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "vscode-agent.switchProfile",
+        "key": "ctrl+shift+a",
+        "mac": "cmd+shift+a"
+      },
+      {
+        "command": "vscode-agent.showDashboard",
+        "key": "ctrl+shift+d",
+        "mac": "cmd+shift+d",
+        "when": "!terminalFocus"
+      },
+      {
+        "command": "vscode-agent.showSnippets",
+        "key": "ctrl+shift+s",
+        "mac": "cmd+shift+s",
+        "when": "!editorFocus"
+      },
+      {
+        "command": "vscode-agent.showConversations",
+        "key": "ctrl+shift+h",
+        "mac": "cmd+shift+h"
+      },
+      {
+        "command": "vscode-agent.showNotifications",
+        "key": "ctrl+shift+n",
+        "mac": "cmd+shift+n"
+      },
+      {
+        "command": "vscode-agent.undo",
+        "key": "ctrl+shift+u",
+        "mac": "cmd+shift+u"
+      },
+      {
+        "command": "vscode-agent.showAnalytics",
+        "key": "ctrl+shift+t",
+        "mac": "cmd+shift+t",
+        "when": "!terminalFocus"
+      },
+      {
+        "command": "vscode-agent.showMarketplace",
+        "key": "ctrl+shift+m",
+        "mac": "cmd+shift+m",
+        "when": "!terminalFocus"
+      }
+    ],
+    "configuration": {
+      "title": "VS Code Agent",
+      "properties": {
+        "vscodeAgent.defaultProfile": {
+          "type": "string",
+          "default": "",
+          "description": "Default profile to activate on startup (e.g. 'frontend', 'backend', 'fullstack')"
+        },
+        "vscodeAgent.locale": {
+          "type": "string",
+          "default": "auto",
+          "enum": ["auto", "en", "sv"],
+          "enumDescriptions": [
+            "Auto-detect from VS Code language",
+            "English",
+            "Svenska"
+          ],
+          "description": "Language for agent messages"
+        },
+        "vscodeAgent.cache.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable response caching for repeated prompts"
+        },
+        "vscodeAgent.cache.ttlMinutes": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 1440,
+          "description": "Cache time-to-live in minutes"
+        },
+        "vscodeAgent.cache.maxEntries": {
+          "type": "number",
+          "default": 200,
+          "minimum": 10,
+          "maximum": 5000,
+          "description": "Maximum number of cached responses"
+        },
+        "vscodeAgent.telemetry.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable local telemetry collection (never sent externally)"
+        },
+        "vscodeAgent.guardrails.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable guardrails and rollback protection"
+        },
+        "vscodeAgent.guardrails.dryRun": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run autonomous agents in dry-run mode (preview only)"
+        },
+        "vscodeAgent.memory.maxEntries": {
+          "type": "number",
+          "default": 500,
+          "minimum": 10,
+          "maximum": 10000,
+          "description": "Maximum number of agent memories to persist"
+        },
+        "vscodeAgent.memory.pruneAfterDays": {
+          "type": "number",
+          "default": 30,
+          "minimum": 1,
+          "maximum": 365,
+          "description": "Auto-prune memories older than this many days"
+        },
+        "vscodeAgent.codeLens.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show Agent CodeLens in source files"
+        },
+        "vscodeAgent.notifications.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show notification center alerts for agent events"
+        },
+        "vscodeAgent.models.default": {
+          "type": "string",
+          "default": "auto",
+          "description": "Default LLM model to use (e.g. 'gpt-4o', 'claude-3.5-sonnet', 'auto')"
+        },
+        "vscodeAgent.autonomous.maxSteps": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Max steps for autonomous agent execution"
+        },
+        "vscodeAgent.autonomous.confirmBeforeApply": {
+          "type": "boolean",
+          "default": true,
+          "description": "Require confirmation before applying autonomous changes"
+        },
+        "vscodeAgent.sidebar.showOnStartup": {
+          "type": "boolean",
+          "default": false,
+          "description": "Auto-show Agent Explorer sidebar on startup"
+        }
+      }
+    },
+    "walkthroughs": [
+      {
+        "id": "vscode-agent.getStarted",
+        "title": "Getting Started with VS Code Agent",
+        "description": "Learn how to use the agent system for supercharged development",
+        "steps": [
+          {
+            "id": "openChat",
+            "title": "Open Chat & Meet Your Agent",
+            "description": "Open the Chat panel and type **@agent** followed by any question or command.\n\n[Open Chat](command:workbench.action.chat.open)",
+            "media": {
+              "markdown": "media/walkthrough/step1.md"
+            }
+          },
+          {
+            "id": "tryCommands",
+            "title": "Try Slash Commands",
+            "description": "Use slash commands to access specialized agents:\n- **/code** – Analyze and generate code\n- **/docs** – Generate documentation\n- **/test** – Create tests\n- **/refactor** – Improve code structure\n\nTry: `@agent /code create a sorting function`",
+            "media": {
+              "markdown": "media/walkthrough/step2.md"
+            }
+          },
+          {
+            "id": "activateProfile",
+            "title": "Activate a Profile",
+            "description": "Profiles customize which agents are active and how they behave.\n\n[Switch Profile](command:vscode-agent.switchProfile)",
+            "media": {
+              "markdown": "media/walkthrough/step3.md"
+            }
+          },
+          {
+            "id": "exploreSidebar",
+            "title": "Explore the Agent Sidebar",
+            "description": "Open Agent Explorer to see all agents, memory, and workflows at a glance.\n\n[Open Agent Explorer](command:agentExplorer.focus)",
+            "media": {
+              "markdown": "media/walkthrough/step4.md"
+            }
+          },
+          {
+            "id": "autonomousAgents",
+            "title": "Autonomous Agents",
+            "description": "Use autonomous commands like **/scaffold**, **/autofix**, **/fullstack** to let agents work independently with guardrails.\n\nThey plan, execute, verify, and iterate automatically.",
+            "media": {
+              "markdown": "media/walkthrough/step5.md"
+            }
+          },
+          {
+            "id": "viewDashboard",
+            "title": "Analytics Dashboard",
+            "description": "Track your agent usage with the built-in analytics dashboard.\n\n[Show Dashboard](command:vscode-agent.showAnalytics)",
+            "media": {
+              "markdown": "media/walkthrough/step6.md"
+            }
+          }
+        ]
+      }
+    ],
+    "viewsWelcome": [
+      {
+        "view": "agentExplorer",
+        "contents": "Welcome to VS Code Agent! 🤖\n\nGet started by opening the Chat panel and typing @agent.\n\n[Open Chat](command:workbench.action.chat.open)\n\n[Switch Profile](command:vscode-agent.switchProfile)\n\n[Show Dashboard](command:vscode-agent.showDashboard)\n\n[Getting Started](command:workbench.action.openWalkthrough?%22vscode-agent.getStarted%22)"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "tsc -p ./ && node out/test/e2e/runTest.js",
+    "package": "vsce package --no-dependencies",
+    "publish": "vsce publish --no-dependencies"
   },
   "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.6",
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.93.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
+    "@vitest/coverage-v8": "^2.0.0",
+    "@vscode/test-electron": "^2.3.8",
     "eslint": "^8.56.0",
-    "typescript": "^5.3.0"
+    "glob": "^10.3.10",
+    "mocha": "^10.2.0",
+    "typescript": "^5.3.0",
+    "vitest": "^2.0.0"
   }
 }

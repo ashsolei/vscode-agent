@@ -13,5 +13,6 @@
     "declaration": true,
     "moduleResolution": "Node16"
   },
-  "exclude": ["node_modules", ".vscode-test", "out"]
+  "include": ["src"],
+  "exclude": ["node_modules", ".vscode-test", "out", "src/**/*.test.ts", "src/__mocks__"]
 }
