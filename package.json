@@ -245,6 +245,50 @@
       {
         "command": "vscode-agent.clearNotifications",
         "title": "Agent: Rensa notifieringar"
+      },
+      {
+        "command": "vscode-agent.switchProfile",
+        "title": "Agent: Byt profil"
+      },
+      {
+        "command": "vscode-agent.createProfile",
+        "title": "Agent: Skapa ny profil"
+      },
+      {
+        "command": "vscode-agent.exportProfile",
+        "title": "Agent: Exportera profil"
+      },
+      {
+        "command": "vscode-agent.importProfile",
+        "title": "Agent: Importera profil"
+      },
+      {
+        "command": "vscode-agent.showConversations",
+        "title": "Agent: Visa konversationer"
+      },
+      {
+        "command": "vscode-agent.saveConversation",
+        "title": "Agent: Spara konversation"
+      },
+      {
+        "command": "vscode-agent.newConversation",
+        "title": "Agent: Ny konversation"
+      },
+      {
+        "command": "vscode-agent.showAnalytics",
+        "title": "Agent: Visa analytics dashboard"
+      },
+      {
+        "command": "vscode-agent.clearTelemetry",
+        "title": "Agent: Rensa telemetri"
+      },
+      {
+        "command": "vscode-agent.createExternalIssue",
+        "title": "Agent: Skapa extern issue"
+      },
+      {
+        "command": "vscode-agent.showMarketplace",
+        "title": "Agent: Öppna Marketplace"
       }
     ],
     "viewsContainers": {

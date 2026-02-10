@@ -55,6 +55,11 @@ import { ContextProviderRegistry } from './context';
 import { CreateAgentAgent } from './agents/create-agent-agent';
 import { SnippetLibrary } from './snippets';
 import { NotificationCenter } from './notifications';
+import { AgentProfileManager } from './profiles';
+import { ConversationPersistence } from './conversations';
+import { TelemetryEngine } from './telemetry';
+import { ExternalIntegrations } from './integrations';
+import { AgentMarketplace } from './marketplace';
 
 /**
  * Extension entry point.
@@ -109,6 +114,22 @@ export function activate(context: vscode.ExtensionContext) {
   // --- 2g3. Skapa notification center ---
   const notifications = new NotificationCenter();
   context.subscriptions.push(notifications);
+
+  // --- 2g4b. Skapa profil-manager ---
+  const profileManager = new AgentProfileManager(context.globalState);
+  context.subscriptions.push(profileManager);
+
+  // --- 2g5. Skapa conversation persistence ---
+  const conversationPersistence = new ConversationPersistence(context.globalState);
+  context.subscriptions.push(conversationPersistence);
+
+  // --- 2g6. Skapa telemetry engine ---
+  const telemetry = new TelemetryEngine(context.globalState);
+  context.subscriptions.push(telemetry);
+
+  // --- 2g7. Skapa external integrations ---
+  const integrations = new ExternalIntegrations();
+  context.subscriptions.push(integrations);
 
   // --- 2g4. Skapa context providers ---
   const contextProviders = new ContextProviderRegistry();
@@ -261,12 +282,21 @@ export function activate(context: vscode.ExtensionContext) {
       return;
     }
 
+    const _startTime = Date.now();
     try {
       // Dashboard: logga start
       const dashId = dashboard.logStart(agent.id, agent.name, request.prompt);
 
       // Status bar: markera aktiv
       statusBar.setActive(agent.id, agent.name);
+
+      // Conversation: spara användarmeddelande
+      await conversationPersistence.addMessage({
+        role: 'user',
+        content: request.prompt,
+        command: request.command,
+        timestamp: Date.now(),
+      });
 
       // Injicera arbetsytekontext automatiskt (git diff, diagnostik, etc.)
       const workspaceContext = await contextProviders.buildPromptContext(2000);
@@ -286,10 +316,37 @@ export function activate(context: vscode.ExtensionContext) {
       // Uppdatera minnesräknare i status bar
       statusBar.updateMemory(memory.stats().totalMemories);
 
+      // Telemetri: logga framgång
+      await telemetry.log({
+        agentId: agent.id,
+        agentName: agent.name,
+        command: request.command ?? 'auto',
+        timestamp: Date.now(),
+        durationMs: Date.now() - _startTime,
+        success: true,
+        promptLength: request.prompt.length,
+      });
+
+      // Conversation: spara agent-svar
+      await conversationPersistence.addMessage({
+        role: 'assistant',
+        content: `[Agent: ${agent.id}] svarade på: ${request.prompt.slice(0, 100)}`,
+        agentId: agent.id,
+        command: request.command,
+        timestamp: Date.now(),
+      });
+
       // Spara-snippet knapp
       stream.button({
         command: 'vscode-agent.saveSnippet',
         title: '📋 Spara som snippet',
+        arguments: [agent.id, request.prompt],
+      });
+
+      // Integrations-knapp
+      stream.button({
+        command: 'vscode-agent.createExternalIssue',
+        title: '📤 Rapportera externt',
         arguments: [agent.id, request.prompt],
       });
 
@@ -308,6 +365,18 @@ export function activate(context: vscode.ExtensionContext) {
 
       // Status bar: markera fel
       statusBar.setIdle(false);
+
+      // Telemetri: logga fel
+      await telemetry.log({
+        agentId: agent?.id ?? 'unknown',
+        agentName: agent?.name ?? 'Unknown',
+        command: request.command ?? 'auto',
+        timestamp: Date.now(),
+        durationMs: Date.now() - _startTime,
+        success: false,
+        error: String(error),
+        promptLength: request.prompt.length,
+      });
 
       // Notifiera om fel
       notifications.notifyAgentDone(
@@ -376,7 +445,20 @@ export function activate(context: vscode.ExtensionContext) {
   eventEngine.activate();
   context.subscriptions.push({ dispose: () => eventEngine.dispose() });
 
-  // --- 5e. Ladda plugin-system ---
+  // --- 5e. Skapa marketplace ---
+  const marketplace = new AgentMarketplace(
+    context.globalState,
+    (pluginData) => {
+      // On install: ladda plugin via pluginLoader
+      outputChannel.appendLine(`Marketplace: installerad: ${pluginData.id}`);
+    },
+    (agentId) => {
+      outputChannel.appendLine(`Marketplace: avinstallerad: ${agentId}`);
+    }
+  );
+  context.subscriptions.push(marketplace);
+
+  // --- 5f. Ladda plugin-system ---
   const pluginLoader = new PluginLoader(
     (agent) => {
       registry.register(agent);
@@ -574,6 +656,87 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // --- Profile-kommandon ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.switchProfile', () => {
+      profileManager.showPicker();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.createProfile', () => {
+      profileManager.showCreateWizard();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.exportProfile', async () => {
+      const active = profileManager.active;
+      if (active) {
+        await profileManager.exportProfile(active.id);
+      } else {
+        vscode.window.showInformationMessage('Ingen aktiv profil att exportera.');
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.importProfile', () => {
+      profileManager.importProfile();
+    })
+  );
+
+  // --- Conversation-kommandon ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.showConversations', () => {
+      conversationPersistence.showPicker();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.saveConversation', () => {
+      conversationPersistence.saveCurrentAs();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.newConversation', () => {
+      conversationPersistence.startNew();
+    })
+  );
+
+  // --- Telemetry-kommandon ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.showAnalytics', () => {
+      telemetry.show(context.extensionUri);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.clearTelemetry', async () => {
+      await telemetry.clear();
+      vscode.window.showInformationMessage('Agent: Telemetri rensad.');
+    })
+  );
+
+  // --- Integration-kommandon ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.createExternalIssue', (agentId?: string, prompt?: string) => {
+      integrations.createIssueInteractive(
+        agentId ?? 'unknown',
+        prompt ?? '',
+        `Genererat av VS Code Agent via /${agentId}`
+      );
+    })
+  );
+
+  // --- Marketplace-kommandon ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.showMarketplace', () => {
+      marketplace.showBrowser();
+    })
+  );
+
   // --- 7. Lyssna på tillståndsändringar (logga i output) ---
 
   sharedState.onDidChange(({ key, value }) => {
@@ -594,6 +757,11 @@ export function activate(context: vscode.ExtensionContext) {
       snippetLibrary.dispose();
       notifications.dispose();
       contextProviders.dispose();
+      profileManager.dispose();
+      conversationPersistence.dispose();
+      telemetry.dispose();
+      integrations.dispose();
+      marketplace.dispose();
     },
   });
 
