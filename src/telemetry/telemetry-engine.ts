@@ -179,7 +179,7 @@ export class TelemetryEngine implements vscode.Disposable {
   }
 
   /** Visa analytics dashboard i webview */
-  show(extensionUri: vscode.Uri): void {
+  show(_extensionUri: vscode.Uri): void {
     if (this.panel) {
       this.panel.reveal();
       this.refreshPanel();
@@ -203,7 +203,7 @@ export class TelemetryEngine implements vscode.Disposable {
     const overview = this.overview();
     const agentStats = this.agentStats();
     const daily = this.dailySummary(14);
-    const hourly = this.hourlyBreakdown(3);
+    const _hourly = this.hourlyBreakdown(3);
 
     // Sortera agenter efter anrop
     const sortedAgents = Object.entries(agentStats)
@@ -223,7 +223,7 @@ export class TelemetryEngine implements vscode.Disposable {
 
     const dailyLabels = JSON.stringify(daily.map((d) => d.date));
     const dailyCalls = JSON.stringify(daily.map((d) => d.calls));
-    const dailySuccess = JSON.stringify(daily.map((d) => d.success));
+    const dailySuccessData = JSON.stringify(daily.map((d) => d.success));
 
     const topAgentLabels = JSON.stringify(sortedAgents.slice(0, 10).map(([id]) => id));
     const topAgentCalls = JSON.stringify(sortedAgents.slice(0, 10).map(([, s]) => s.calls));
@@ -333,6 +333,7 @@ export class TelemetryEngine implements vscode.Disposable {
 
     const dailyLabels = ${dailyLabels};
     const dailyCalls = ${dailyCalls};
+    const dailySuccess = ${dailySuccessData};
     const agentLabels = ${topAgentLabels};
     const agentCalls = ${topAgentCalls};
 

@@ -120,15 +120,7 @@ export class DiffPreview implements vscode.Disposable {
     }
 
     if (diff.type === 'modify' && diff.original && diff.proposed) {
-      // Visa VS Code diff editor
-      const originalUri = vscode.Uri.parse(
-        `untitled:original/${diff.path}`
-      );
-      const proposedUri = vscode.Uri.parse(
-        `untitled:proposed/${diff.path}`
-      );
-
-      // Skapa temporära dokument
+      // Skapa temporära dokument för diff-vy
       const origDoc = await vscode.workspace.openTextDocument({
         content: diff.original,
         language: this.guessLanguage(diff.path),

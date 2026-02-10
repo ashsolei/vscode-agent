@@ -37,7 +37,7 @@ export class ResponseCache {
   }
 
   private load() {
-    if (!this.memento) return;
+    if (!this.memento) {return;}
     const data = this.memento.get<[string, CacheEntry][]>('responseCache', []);
     const now = Date.now();
     for (const [key, entry] of data) {
@@ -48,15 +48,15 @@ export class ResponseCache {
   }
 
   private async persist() {
-    if (!this.memento) return;
+    if (!this.memento) {return;}
     await this.memento.update('responseCache', Array.from(this.cache.entries()));
   }
 
   /** Generera en cache-nyckel från prompt + context */
   static makeKey(prompt: string, command?: string, model?: string): string {
     const parts = [prompt.trim().toLowerCase()];
-    if (command) parts.push(`cmd:${command}`);
-    if (model) parts.push(`model:${model}`);
+    if (command) {parts.push(`cmd:${command}`);}
+    if (model) {parts.push(`model:${model}`);}
     return parts.join('|');
   }
 
@@ -102,7 +102,7 @@ export class ResponseCache {
   /** Invaldera en specifik nyckel */
   async invalidate(key: string): Promise<boolean> {
     const deleted = this.cache.delete(key);
-    if (deleted) await this.persist();
+    if (deleted) {await this.persist();}
     return deleted;
   }
 
@@ -115,7 +115,7 @@ export class ResponseCache {
         count++;
       }
     }
-    if (count > 0) await this.persist();
+    if (count > 0) {await this.persist();}
     return count;
   }
 
@@ -137,7 +137,7 @@ export class ResponseCache {
         count++;
       }
     }
-    if (count > 0) await this.persist();
+    if (count > 0) {await this.persist();}
     return count;
   }
 
@@ -152,7 +152,7 @@ export class ResponseCache {
         oldest = key;
       }
     }
-    if (oldest) this.cache.delete(oldest);
+    if (oldest) {this.cache.delete(oldest);}
   }
 
   get size(): number {

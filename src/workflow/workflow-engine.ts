@@ -1,5 +1,4 @@
-import * as vscode from 'vscode';
-import { AgentRegistry, ChainStep } from '../agents/index';
+import { AgentRegistry } from '../agents/index';
 import { AgentContext } from '../agents/base-agent';
 
 /**

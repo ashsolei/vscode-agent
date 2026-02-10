@@ -70,7 +70,7 @@ export class ExplainAgent extends BaseAgent {
 
     const prompt = additionalContext ? `${PROMPT}\n\nKontext:${additionalContext}` : PROMPT;
 
-    const response = await this.chat(ctx, prompt);
+    await this.chat(ctx, prompt);
 
     // Spara ämnet i lärhistorik
     const topic = ctx.request.prompt.slice(0, 60);

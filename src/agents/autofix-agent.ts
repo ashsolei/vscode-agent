@@ -99,11 +99,9 @@ export class AutoFixAgent extends BaseAgent {
       this.progress(ctx, `🔧 Applicerar ${result.fixes?.length ?? 0} fixar...`);
 
       // Applicera kodfixar
-      let fixCount = 0;
       for (const fix of (result.fixes ?? [])) {
         const editResult = await executor.editFile(fix.file, fix.oldCode, fix.newCode);
         if (editResult.success) {
-          fixCount++;
           ctx.stream.markdown(`✅ **${fix.file}**: ${fix.description}\n`);
         } else {
           ctx.stream.markdown(`⚠️ **${fix.file}**: Kunde inte applicera fix — ${fix.description}\n`);

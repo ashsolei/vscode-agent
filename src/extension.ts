@@ -94,9 +94,13 @@ export function activate(context: vscode.ExtensionContext) {
   const cacheEnabled = cacheConfig.get<boolean>('enabled', true);
 
   // --- 2b. Skapa persistent minne ---
+  const memoryConfig = vscode.workspace.getConfiguration('vscodeAgent.memory');
   const memory = new AgentMemory(context.globalState);
-  // Automatisk rensning av gamla minnen
-  memory.prune();
+  // Automatisk rensning av gamla minnen (respektera settings)
+  memory.prune({
+    maxAge: (memoryConfig.get<number>('pruneAfterDays', 30)) * 24 * 60 * 60 * 1000,
+    maxCount: memoryConfig.get<number>('maxEntries', 500),
+  });
 
   // --- 2c. Skapa middleware-pipeline ---
   const outputChannel = vscode.window.createOutputChannel('VS Code Agent');
@@ -111,7 +115,10 @@ export function activate(context: vscode.ExtensionContext) {
   const dashboard = new AgentDashboard(context.extensionUri);
 
   // --- 2e. Skapa guard rails ---
-  const _guardrails = new GuardRails();
+  const guardrailsConfig = vscode.workspace.getConfiguration('vscodeAgent.guardrails');
+  const guardrailsEnabled = guardrailsConfig.get<boolean>('enabled', true);
+  const guardrailsDryRun = guardrailsConfig.get<boolean>('dryRun', false);
+  const guardrails = new GuardRails();
 
   // --- 2f. Skapa config manager ---
   const configManager = new ConfigManager();
@@ -130,6 +137,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(snippetLibrary);
 
   // --- 2g3. Skapa notification center ---
+  const notificationsEnabled = vscode.workspace.getConfiguration('vscodeAgent.notifications').get<boolean>('enabled', true);
   const notifications = new NotificationCenter();
   context.subscriptions.push(notifications);
 
@@ -137,11 +145,18 @@ export function activate(context: vscode.ExtensionContext) {
   const profileManager = new AgentProfileManager(context.globalState);
   context.subscriptions.push(profileManager);
 
+  // Aktivera default-profil från settings
+  const defaultProfile = vscode.workspace.getConfiguration('vscodeAgent').get<string>('defaultProfile', '');
+  if (defaultProfile) {
+    profileManager.activate(defaultProfile);
+  }
+
   // --- 2g5. Skapa conversation persistence ---
   const conversationPersistence = new ConversationPersistence(context.globalState);
   context.subscriptions.push(conversationPersistence);
 
   // --- 2g6. Skapa telemetry engine ---
+  const telemetryEnabled = vscode.workspace.getConfiguration('vscodeAgent').get<boolean>('telemetry.enabled', true);
   const telemetry = new TelemetryEngine(context.globalState);
   context.subscriptions.push(telemetry);
 
@@ -154,15 +169,18 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(contextProviders);
 
   // --- 2i. Skapa model selector ---
+  const defaultModelSetting = vscode.workspace.getConfiguration('vscodeAgent.models').get<string>('default', 'auto');
   const modelSelector = new ModelSelector(
-    (configManager.current as any)?.models ?? undefined
+    defaultModelSetting !== 'auto' ? { default: { family: defaultModelSetting } } : undefined
   );
   context.subscriptions.push(modelSelector);
 
   // Uppdatera model selector vid config-ändringar
-  configManager.onDidChange((config: any) => {
-    if (config?.models) {
-      modelSelector.updateConfig(config.models);
+  configManager.onDidChange((config) => {
+    // .agentrc.json kan definiera models-konfiguration
+    const models = (config as any)?.models;
+    if (models) {
+      modelSelector.updateConfig(models);
     }
   });
 
@@ -301,6 +319,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     const _startTime = Date.now();
+    let dashId = '';
 
     // Cache: check for cached response
     if (cacheEnabled && request.command) {
@@ -314,9 +333,25 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }
 
+    // GuardRails: skapa checkpoint för autonoma agenter
+    const isAutonomous = ['scaffold', 'autofix', 'devops', 'db', 'migrate',
+      'component', 'fullstack', 'cli', 'docgen'].includes(agent.id);
+    if (guardrailsEnabled && isAutonomous) {
+      if (guardrailsDryRun) {
+        guardrails.dryRun([{ action: 'run', target: agent.id, detail: request.prompt }]);
+        return { metadata: { command: request.command ?? 'default', dryRun: true } };
+      }
+      // Skapa checkpoint innan autonomt körning
+      try {
+        await guardrails.createCheckpoint(agent.id, `Innan /${agent.id}: ${request.prompt.slice(0, 50)}`, []);
+      } catch {
+        // Ingen workspace — hoppa över checkpoint
+      }
+    }
+
     try {
       // Dashboard: logga start
-      const dashId = dashboard.logStart(agent.id, agent.name, request.prompt);
+      dashId = dashboard.logStart(agent.id, agent.name, request.prompt);
 
       // Status bar: markera aktiv
       statusBar.setActive(agent.id, agent.name);
@@ -331,9 +366,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       // Injicera arbetsytekontext automatiskt (git diff, diagnostik, etc.)
       const workspaceContext = await contextProviders.buildPromptContext(2000);
-      if (workspaceContext && stream) {
-        // Kontexten läggs till internt — inte visas för användaren
-      }
+      ctx.workspaceContext = workspaceContext;
 
       // Kör genom middleware-pipeline (timing, rate-limit, usage)
       const result = await middleware.execute(agent, ctx);
@@ -350,16 +383,25 @@ export function activate(context: vscode.ExtensionContext) {
       // Uppdatera cache-räknare i status bar
       statusBar.updateCache(responseCache.stats);
 
+      // Cache: spara lyckat svar för framtida cache-hits
+      if (cacheEnabled && request.command) {
+        const cacheKey = ResponseCache.makeKey(request.prompt, request.command);
+        const cachedValue = JSON.stringify({ agentId: agent.id, ok: true, ts: Date.now() });
+        await responseCache.set(cacheKey, cachedValue, { agentId: agent.id });
+      }
+
       // Telemetri: logga framgång
-      await telemetry.log({
-        agentId: agent.id,
-        agentName: agent.name,
-        command: request.command ?? 'auto',
-        timestamp: Date.now(),
-        durationMs: Date.now() - _startTime,
-        success: true,
-        promptLength: request.prompt.length,
-      });
+      if (telemetryEnabled) {
+        await telemetry.log({
+          agentId: agent.id,
+          agentName: agent.name,
+          command: request.command ?? 'auto',
+          timestamp: Date.now(),
+          durationMs: Date.now() - _startTime,
+          success: true,
+          promptLength: request.prompt.length,
+        });
+      }
 
       // Conversation: spara agent-svar
       await conversationPersistence.addMessage({
@@ -387,38 +429,41 @@ export function activate(context: vscode.ExtensionContext) {
       // Returnera uppföljningsförslag om agenten gav sådana
       if (result.followUps && result.followUps.length > 0) {
         return {
-          metadata: { command: request.command ?? 'default' },
-          followUp: result.followUps,
-        } as vscode.ChatResult;
+          metadata: { command: request.command ?? 'default', followUps: result.followUps },
+        };
       }
 
       return { metadata: { command: request.command ?? 'default' } };
     } catch (error) {
       // Dashboard: logga fel
-      dashboard.logEnd('', false, String(error));
+      dashboard.logEnd(dashId, false, String(error));
 
       // Status bar: markera fel
       statusBar.setIdle(false);
 
       // Telemetri: logga fel
-      await telemetry.log({
-        agentId: agent?.id ?? 'unknown',
-        agentName: agent?.name ?? 'Unknown',
-        command: request.command ?? 'auto',
-        timestamp: Date.now(),
-        durationMs: Date.now() - _startTime,
-        success: false,
-        error: String(error),
-        promptLength: request.prompt.length,
-      });
+      if (telemetryEnabled) {
+        await telemetry.log({
+          agentId: agent?.id ?? 'unknown',
+          agentName: agent?.name ?? 'Unknown',
+          command: request.command ?? 'auto',
+          timestamp: Date.now(),
+          durationMs: Date.now() - _startTime,
+          success: false,
+          error: String(error),
+          promptLength: request.prompt.length,
+        });
+      }
 
       // Notifiera om fel
-      notifications.notifyAgentDone(
-        agent?.id ?? 'unknown',
-        agent?.name ?? 'Unknown',
-        false,
-        String(error)
-      );
+      if (notificationsEnabled) {
+          notifications.notifyAgentDone(
+          agent?.id ?? 'unknown',
+          agent?.name ?? 'Unknown',
+          false,
+          String(error)
+        );
+      }
 
       if (error instanceof vscode.LanguageModelError) {
         stream.markdown(`⚠️ Språkmodellfel: ${error.message}`);
@@ -444,8 +489,8 @@ export function activate(context: vscode.ExtensionContext) {
       _context: vscode.ChatContext,
       _token: vscode.CancellationToken
     ): vscode.ProviderResult<vscode.ChatFollowup[]> {
-      // Returnera followUps som sparades i resultatet
-      return (result as any).followUp ?? [];
+      // Hämta followUps från metadata
+      return (result.metadata as any)?.followUps ?? [];
     },
   };
 
@@ -459,8 +504,16 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(treeView);
 
+  // Visa sidopanelen vid start om konfigurerat
+  const showSidebarOnStartup = vscode.workspace.getConfiguration('vscodeAgent.sidebar').get<boolean>('showOnStartup', false);
+  if (showSidebarOnStartup) {
+    vscode.commands.executeCommand('agentExplorer.focus');
+  }
+
   // --- 5c. Registrera CodeLens ---
+  const codeLensEnabled = vscode.workspace.getConfiguration('vscodeAgent.codeLens').get<boolean>('enabled', true);
   const codeLensProvider = new AgentCodeLensProvider();
+  codeLensProvider.setEnabled(codeLensEnabled);
   context.subscriptions.push(
     vscode.languages.registerCodeLensProvider(
       [
@@ -575,7 +628,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('vscode-agent.undo', async () => {
-      const result = await _guardrails.undo();
+      const result = await guardrails.undo();
       if (result) {
         vscode.window.showInformationMessage(
           `Agent: Undo klar — ${result.restoredFiles} filer återställda.`

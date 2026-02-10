@@ -1,4 +1,3 @@
-import * as vscode from 'vscode';
 import { BaseAgent, AgentContext, AgentResult } from '../agents/base-agent';
 import { AutonomousExecutor } from '../autonomous/executor';
 

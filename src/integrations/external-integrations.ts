@@ -25,23 +25,24 @@ export class ExternalIntegrations implements vscode.Disposable {
     this.loadConfig();
   }
 
-  /** Ladda konfiguration från settings */
+  /** Ladda konfiguration från settings / environment */
   private loadConfig(): void {
-    const ws = vscode.workspace.getConfiguration('agent.integrations');
+    // Läs från environment-variabler eller manual config
+    // (Tokens ska INTE ligga i VS Code settings — använd env vars istället)
     this.config = {
       github: {
-        token: ws.get<string>('github.token'),
-        repo: ws.get<string>('github.repo'),
+        token: process.env['GITHUB_TOKEN'],
+        repo: process.env['GITHUB_REPO'],
       },
       slack: {
-        webhookUrl: ws.get<string>('slack.webhookUrl'),
-        channel: ws.get<string>('slack.channel'),
+        webhookUrl: process.env['SLACK_WEBHOOK_URL'],
+        channel: process.env['SLACK_CHANNEL'],
       },
       jira: {
-        baseUrl: ws.get<string>('jira.baseUrl'),
-        email: ws.get<string>('jira.email'),
-        token: ws.get<string>('jira.token'),
-        project: ws.get<string>('jira.project'),
+        baseUrl: process.env['JIRA_BASE_URL'],
+        email: process.env['JIRA_EMAIL'],
+        token: process.env['JIRA_TOKEN'],
+        project: process.env['JIRA_PROJECT'],
       },
     };
   }

@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AgentRegistry } from '../agents';
-import type { AgentContext, AgentResult } from '../agents/base-agent';
+import type { AgentContext } from '../agents/base-agent';
 
 /**
  * Röstresultat från en enskild agent.

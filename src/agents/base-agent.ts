@@ -18,6 +18,8 @@ export interface AgentContext {
   chatContext: vscode.ChatContext;
   stream: vscode.ChatResponseStream;
   token: vscode.CancellationToken;
+  /** Automatiskt injicerad arbetsytekontexttext (git diff, diagnostik, etc.) */
+  workspaceContext?: string;
 }
 
 /**

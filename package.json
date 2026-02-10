@@ -338,9 +338,8 @@
       },
       {
         "command": "vscode-agent.showDashboard",
-        "key": "ctrl+shift+d",
-        "mac": "cmd+shift+d",
-        "when": "!terminalFocus"
+        "key": "ctrl+k ctrl+d",
+        "mac": "cmd+k cmd+d"
       },
       {
         "command": "vscode-agent.showSnippets",
@@ -355,25 +354,23 @@
       },
       {
         "command": "vscode-agent.showNotifications",
-        "key": "ctrl+shift+n",
-        "mac": "cmd+shift+n"
+        "key": "ctrl+k ctrl+n",
+        "mac": "cmd+k cmd+n"
       },
       {
         "command": "vscode-agent.undo",
-        "key": "ctrl+shift+u",
-        "mac": "cmd+shift+u"
+        "key": "ctrl+k ctrl+u",
+        "mac": "cmd+k cmd+u"
       },
       {
         "command": "vscode-agent.showAnalytics",
-        "key": "ctrl+shift+t",
-        "mac": "cmd+shift+t",
-        "when": "!terminalFocus"
+        "key": "ctrl+k ctrl+t",
+        "mac": "cmd+k cmd+t"
       },
       {
         "command": "vscode-agent.showMarketplace",
-        "key": "ctrl+shift+m",
-        "mac": "cmd+shift+m",
-        "when": "!terminalFocus"
+        "key": "ctrl+k ctrl+m",
+        "mac": "cmd+k cmd+m"
       }
     ],
     "configuration": {
@@ -554,7 +551,6 @@
     "publish": "vsce publish --no-dependencies"
   },
   "devDependencies": {
-    "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.6",
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.93.0",
@@ -562,9 +558,9 @@
     "@typescript-eslint/parser": "^7.0.0",
     "@vitest/coverage-v8": "^2.0.0",
     "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^3.0.0",
     "eslint": "^8.56.0",
     "glob": "^10.3.10",
-    "mocha": "^10.2.0",
     "typescript": "^5.3.0",
     "vitest": "^2.0.0"
   }

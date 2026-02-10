@@ -3,6 +3,7 @@
  * Mockarna tillhandahåller tillräckligt av VS Code API:et
  * för att kunna testa agenter och infrastruktur utan runtime.
  */
+import { vi } from 'vitest';
 
 export const Uri = {
   file: (path: string) => ({ scheme: 'file', fsPath: path, path, toString: () => path }),
@@ -159,6 +160,3 @@ export enum ProgressLocation {
   SourceControl = 1,
   Window = 10,
 }
-
-// Needed for vi.fn() references
-import { vi } from 'vitest';

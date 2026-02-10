@@ -4,7 +4,6 @@
 src/**
 scripts/**
 coverage/**
-media/walkthrough/**
 node_modules/**
 out/test/**
 *.ts

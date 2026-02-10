@@ -11,7 +11,7 @@ export class FileTool extends BaseTool {
 
   async execute(
     params: Record<string, unknown>,
-    token: vscode.CancellationToken
+    _token: vscode.CancellationToken
   ): Promise<ToolResult> {
     const action = params['action'] as string;
 
