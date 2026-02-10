@@ -138,6 +138,10 @@
             "description": "🤖 Bygg hela webbappar: frontend + backend + databas"
           },
           {
+            "name": "testrunner",
+            "description": "🧪 Kör tester, analysera fel, self-correct automatiskt"
+          },
+          {
             "name": "workflow-quality",
             "description": "🔄 Workflow: Kodgranskning + tester + säkerhet + prestanda"
           },
@@ -189,6 +193,18 @@
         "command": "vscode-agent.refreshTree",
         "title": "Agent: Uppdatera sidopanel",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "vscode-agent.createPlugin",
+        "title": "Agent: Skapa ny plugin-agent"
+      },
+      {
+        "command": "vscode-agent.showModels",
+        "title": "Agent: Visa modell-konfiguration"
+      },
+      {
+        "command": "vscode-agent.previewDiff",
+        "title": "Agent: Förhandsgranska ändringar"
       }
     ],
     "viewsContainers": {

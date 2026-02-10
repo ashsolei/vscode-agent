@@ -29,6 +29,7 @@ import { DocGenAgent } from './agents/docgen-agent';
 import { MetricsAgent } from './agents/metrics-agent';
 import { CliAgent } from './agents/cli-agent';
 import { FullstackAgent } from './agents/fullstack-agent';
+import { TestRunnerAgent } from './agents/testrunner-agent';
 import { ToolRegistry } from './tools';
 import { SharedState } from './state';
 import {
@@ -45,6 +46,10 @@ import { EventDrivenEngine } from './events';
 import { ConfigManager } from './config';
 import { AgentTreeProvider } from './views';
 import { AgentCodeLensProvider } from './views/agent-codelens';
+import { PluginLoader } from './plugins';
+import { AgentStatusBar } from './statusbar';
+import { DiffPreview } from './diff';
+import { ModelSelector } from './models';
 
 /**
  * Extension entry point.
@@ -83,6 +88,27 @@ export function activate(context: vscode.ExtensionContext) {
   // --- 2f. Skapa config manager ---
   const configManager = new ConfigManager();
   context.subscriptions.push({ dispose: () => configManager.dispose() });
+
+  // --- 2g. Skapa status bar ---
+  const statusBar = new AgentStatusBar();
+  context.subscriptions.push(statusBar);
+
+  // --- 2h. Skapa diff preview ---
+  const diffPreview = new DiffPreview();
+  context.subscriptions.push(diffPreview);
+
+  // --- 2i. Skapa model selector ---
+  const modelSelector = new ModelSelector(
+    (configManager.current as any)?.models ?? undefined
+  );
+  context.subscriptions.push(modelSelector);
+
+  // Uppdatera model selector vid config-ändringar
+  configManager.onDidChange((config: any) => {
+    if (config?.models) {
+      modelSelector.updateConfig(config.models);
+    }
+  });
 
   // --- 3. Skapa och registrera agenter ---
   const registry = new AgentRegistry();
@@ -131,6 +157,7 @@ export function activate(context: vscode.ExtensionContext) {
   registry.register(new MetricsAgent());
   registry.register(new CliAgent());
   registry.register(new FullstackAgent());
+  registry.register(new TestRunnerAgent());
 
   // Standardagenten är code
   registry.setDefault('code');
@@ -197,11 +224,20 @@ export function activate(context: vscode.ExtensionContext) {
       // Dashboard: logga start
       const dashId = dashboard.logStart(agent.id, agent.name, request.prompt);
 
+      // Status bar: markera aktiv
+      statusBar.setActive(agent.id, agent.name);
+
       // Kör genom middleware-pipeline (timing, rate-limit, usage)
       const result = await middleware.execute(agent, ctx);
 
       // Dashboard: logga slut
       dashboard.logEnd(dashId, true);
+
+      // Status bar: markera idle
+      statusBar.setIdle(true);
+
+      // Uppdatera minnesräknare i status bar
+      statusBar.updateMemory(memory.stats().totalMemories);
 
       // Returnera uppföljningsförslag om agenten gav sådana
       if (result.followUps && result.followUps.length > 0) {
@@ -215,6 +251,9 @@ export function activate(context: vscode.ExtensionContext) {
     } catch (error) {
       // Dashboard: logga fel
       dashboard.logEnd('', false, String(error));
+
+      // Status bar: markera fel
+      statusBar.setIdle(false);
 
       if (error instanceof vscode.LanguageModelError) {
         stream.markdown(`⚠️ Språkmodellfel: ${error.message}`);
@@ -274,6 +313,29 @@ export function activate(context: vscode.ExtensionContext) {
   const eventEngine = new EventDrivenEngine(registry, context.globalState);
   eventEngine.activate();
   context.subscriptions.push({ dispose: () => eventEngine.dispose() });
+
+  // --- 5e. Ladda plugin-system ---
+  const pluginLoader = new PluginLoader(
+    (agent) => {
+      registry.register(agent);
+      agent.setRegistry(registry);
+      treeProvider.refresh();
+      statusBar.updatePlugins(pluginLoader.listPlugins().length);
+    },
+    (agentId) => {
+      // Agenter kan inte avregistreras från AgentRegistry just nu,
+      // men vi loggar det:
+      outputChannel.appendLine(`Plugin avregistrerad: ${agentId}`);
+      statusBar.updatePlugins(pluginLoader.listPlugins().length);
+    }
+  );
+  pluginLoader.activate().then((plugins) => {
+    if (plugins.length > 0) {
+      outputChannel.appendLine(`Laddade ${plugins.length} plugins`);
+      statusBar.updatePlugins(plugins.length);
+    }
+  });
+  context.subscriptions.push(pluginLoader);
 
   // --- 6. Registrera kommandon ---
   context.subscriptions.push(
@@ -352,6 +414,59 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // --- Nya kommandon: Plugins, Models, Diff ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.createPlugin', async () => {
+      const id = await vscode.window.showInputBox({
+        prompt: 'Plugin-ID (slug, t.ex. "my-agent")',
+        placeHolder: 'my-agent',
+        validateInput: (v) =>
+          /^[a-z0-9-]+$/.test(v) ? null : 'Använd bara a-z, 0-9, bindestreck',
+      });
+      if (!id) { return; }
+
+      const name = await vscode.window.showInputBox({
+        prompt: 'Plugin-namn',
+        placeHolder: 'My Custom Agent',
+      });
+      if (!name) { return; }
+
+      const uri = await pluginLoader.createPlugin(id, name);
+      if (uri) {
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc);
+        vscode.window.showInformationMessage(
+          `🔌 Plugin "${name}" skapad! Redigera JSON-filen och den hot-reloadas automatiskt.`
+        );
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.showModels', async () => {
+      const info = modelSelector.describeModelAssignments();
+      const available = await modelSelector.listAvailableModels();
+      const modelList = available.map((m) => `- ${m.name} (${m.id})`).join('\n');
+
+      const content = `${info}\n\n## Tillgängliga modeller\n${modelList}`;
+      const doc = await vscode.workspace.openTextDocument({
+        content,
+        language: 'markdown',
+      });
+      await vscode.window.showTextDocument(doc);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.previewDiff', () => {
+      if (diffPreview.count === 0) {
+        vscode.window.showInformationMessage('Inga väntande ändringar att förhandsgranska.');
+        return;
+      }
+      diffPreview.showPreview();
+    })
+  );
+
   // --- 7. Lyssna på tillståndsändringar (logga i output) ---
 
   sharedState.onDidChange(({ key, value }) => {
@@ -365,6 +480,10 @@ export function activate(context: vscode.ExtensionContext) {
     dispose: () => {
       sharedState.dispose();
       dashboard.dispose();
+      statusBar.dispose();
+      diffPreview.dispose();
+      modelSelector.dispose();
+      pluginLoader.dispose();
     },
   });
 
