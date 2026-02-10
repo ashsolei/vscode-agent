@@ -60,12 +60,22 @@ import { ConversationPersistence } from './conversations';
 import { TelemetryEngine } from './telemetry';
 import { ExternalIntegrations } from './integrations';
 import { AgentMarketplace } from './marketplace';
+import { ResponseCache } from './cache';
+import { initI18n, setLocale, Locale } from './i18n';
 
 /**
  * Extension entry point.
  * Sätter upp agentregistret, verktyg, delat tillstånd och VS Code Chat Participant.
  */
 export function activate(context: vscode.ExtensionContext) {
+  // --- 0. Initiera i18n ---
+  const localeSetting = vscode.workspace.getConfiguration('vscodeAgent').get<string>('locale', 'auto');
+  if (localeSetting === 'auto') {
+    initI18n();
+  } else {
+    setLocale(localeSetting as Locale);
+  }
+
   // --- 1. Initiera delat tillstånd (synkroniseras mellan fönster) ---
   const sharedState = new SharedState(
     context.globalState,
@@ -74,6 +84,14 @@ export function activate(context: vscode.ExtensionContext) {
 
   // --- 2. Skapa verktygsregistret ---
   const tools = ToolRegistry.createDefault();
+
+  // --- 2a2. Skapa response cache ---
+  const cacheConfig = vscode.workspace.getConfiguration('vscodeAgent.cache');
+  const responseCache = new ResponseCache(context.globalState, {
+    maxEntries: cacheConfig.get<number>('maxEntries', 200),
+    defaultTtl: (cacheConfig.get<number>('ttlMinutes', 10)) * 60 * 1000,
+  });
+  const cacheEnabled = cacheConfig.get<boolean>('enabled', true);
 
   // --- 2b. Skapa persistent minne ---
   const memory = new AgentMemory(context.globalState);
@@ -283,6 +301,19 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     const _startTime = Date.now();
+
+    // Cache: check for cached response
+    if (cacheEnabled && request.command) {
+      const cacheKey = ResponseCache.makeKey(request.prompt, request.command);
+      const cached = responseCache.get(cacheKey);
+      if (cached) {
+        stream.markdown(cached);
+        stream.markdown('\n\n---\n*📦 Cachat svar*');
+        statusBar.updateCache(responseCache.stats);
+        return { metadata: { command: request.command, cached: true } };
+      }
+    }
+
     try {
       // Dashboard: logga start
       const dashId = dashboard.logStart(agent.id, agent.name, request.prompt);
@@ -315,6 +346,9 @@ export function activate(context: vscode.ExtensionContext) {
 
       // Uppdatera minnesräknare i status bar
       statusBar.updateMemory(memory.stats().totalMemories);
+
+      // Uppdatera cache-räknare i status bar
+      statusBar.updateCache(responseCache.stats);
 
       // Telemetri: logga framgång
       await telemetry.log({

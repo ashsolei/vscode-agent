@@ -435,13 +435,14 @@ export class AgentMarketplace implements vscode.Disposable {
       case 'Betygsätt':
         await this.rate(marketplaceId);
         break;
-      case 'Visa källa':
+      case 'Visa k\u00e4lla': {
         const doc = await vscode.workspace.openTextDocument({
           content: JSON.stringify(agent.pluginData, null, 2),
           language: 'json',
         });
         await vscode.window.showTextDocument(doc);
         break;
+      }
     }
   }
 

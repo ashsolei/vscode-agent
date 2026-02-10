@@ -1,6 +1,6 @@
 import * as path from 'path';
 import Mocha from 'mocha';
-import * as glob from 'glob';
+import { globSync } from 'glob';
 
 export function run(): Promise<void> {
   const mocha = new Mocha({
@@ -12,7 +12,7 @@ export function run(): Promise<void> {
   const testsRoot = path.resolve(__dirname, '.');
 
   return new Promise((resolve, reject) => {
-    const files = glob.sync('**/*.test.js', { cwd: testsRoot });
+    const files = globSync('**/*.test.js', { cwd: testsRoot });
     files.forEach((f) => mocha.addFile(path.resolve(testsRoot, f)));
 
     try {

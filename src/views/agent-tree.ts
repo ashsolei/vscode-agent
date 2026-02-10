@@ -58,6 +58,8 @@ class AgentTreeItem extends vscode.TreeItem {
       metrics: 'graph',
       cli: 'terminal',
       fullstack: 'rocket',
+      testrunner: 'beaker',
+      'create-agent': 'wand',
     };
 
     return new vscode.ThemeIcon(iconMap[agentId] ?? 'hubot');
@@ -96,6 +98,8 @@ export class AgentTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     ['Arkitektur', ['architect', 'api']],
     ['Verktyg', ['translate', 'deps', 'explain', 'git']],
     ['Autonoma', ['scaffold', 'autofix', 'devops', 'db', 'migrate', 'component', 'i18n', 'plan', 'a11y', 'docgen', 'metrics', 'cli', 'fullstack']],
+    ['Testning', ['testrunner']],
+    ['Meta', ['create-agent']],
   ]);
 
   constructor(
@@ -136,6 +140,8 @@ export class AgentTreeProvider implements vscode.TreeDataProvider<TreeNode> {
             'Arkitektur': 'layers',
             'Verktyg': 'tools',
             'Autonoma': 'hubot',
+            'Testning': 'beaker',
+            'Meta': 'wand',
           };
           result.push(new CategoryTreeItem(catName, agentItems, icons[catName] ?? 'folder'));
         }

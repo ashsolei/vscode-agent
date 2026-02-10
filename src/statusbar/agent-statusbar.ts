@@ -13,6 +13,7 @@ export class AgentStatusBar implements vscode.Disposable {
   private mainItem: vscode.StatusBarItem;
   private memoryItem: vscode.StatusBarItem;
   private pluginItem: vscode.StatusBarItem;
+  private cacheItem: vscode.StatusBarItem;
 
   private activeAgent: string | null = null;
   private totalRuns = 0;
@@ -38,10 +39,19 @@ export class AgentStatusBar implements vscode.Disposable {
     this.memoryItem.tooltip = 'Visa agentminne';
     this.memoryItem.show();
 
+    // Cache-indikator — vänster sida
+    this.cacheItem = vscode.window.createStatusBarItem(
+      vscode.StatusBarAlignment.Left,
+      98
+    );
+    this.cacheItem.command = 'vscode-agent.showDashboard';
+    this.cacheItem.tooltip = 'Response Cache';
+    this.cacheItem.show();
+
     // Plugin-räknare — vänster sida
     this.pluginItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Left,
-      98
+      97
     );
     this.pluginItem.command = 'vscode-agent.createPlugin';
     this.pluginItem.tooltip = 'Agent Plugins (klicka för att skapa ny)';
@@ -87,6 +97,14 @@ export class AgentStatusBar implements vscode.Disposable {
   }
 
   /**
+   * Uppdatera cache-statistik.
+   */
+  updateCache(stats: { size: number; hitRate: number; hits: number; misses: number }): void {
+    this.cacheItem.text = `$(archive) ${stats.size} | ${stats.hitRate}%`;
+    this.cacheItem.tooltip = `Response Cache: ${stats.size} poster\nTräfffrekvens: ${stats.hitRate}%\nTräffar: ${stats.hits} | Missar: ${stats.misses}`;
+  }
+
+  /**
    * Rendera statusfältet.
    */
   private render(): void {
@@ -127,6 +145,7 @@ export class AgentStatusBar implements vscode.Disposable {
   dispose(): void {
     this.mainItem.dispose();
     this.memoryItem.dispose();
+    this.cacheItem.dispose();
     this.pluginItem.dispose();
   }
 }

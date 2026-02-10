@@ -200,10 +200,10 @@ Generera ENBART TypeScript-koden, inget annat. Inkludera alla imports.`;
 
     ctx.stream.markdown(`\n\n✅ Agent sparad till \`${filePath}\`\n\n`);
     ctx.stream.markdown('**Nästa steg:**\n');
-    ctx.stream.markdown(`1. Importera i \`extension.ts\`: \`import { ${className} } from './agents/${fileName}';\`\n`);
-    ctx.stream.markdown(`2. Registrera: \`registry.register(new ${className}());\`\n`);
-    ctx.stream.markdown('3. Lägg till slash-command i \`package.json\`\n');
-    ctx.stream.markdown('4. Kör \`npm run compile\`\n');
+    ctx.stream.markdown('1. Importera i `extension.ts`: `import { ' + className + " } from './agents/" + fileName + "';`\n");
+    ctx.stream.markdown('2. Registrera: `registry.register(new ' + className + '());`\n');
+    ctx.stream.markdown('3. Lägg till slash-command i `package.json`\n');
+    ctx.stream.markdown('4. Kör `npm run compile`\n');
 
     executor.reportSummary();
 

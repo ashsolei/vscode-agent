@@ -109,7 +109,7 @@ export class AgentMemory {
     const words = query.toLowerCase().split(/\s+/);
     const limit = options?.limit ?? 10;
 
-    let candidates = options?.agentId
+    const candidates = options?.agentId
       ? this.memories.filter((m) => m.agentId === options.agentId)
       : [...this.memories];
 
