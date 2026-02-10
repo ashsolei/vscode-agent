@@ -2,7 +2,7 @@
 
 En modulär, utbyggbar agent-struktur för VS Code Chat med **30+ specialiserade AI-agenter**, autonoma filändringar, cross-window-synkronisering, marketplace, telemetri och en komplett utvecklingsplattform.
 
-**80+ filer · 10 000+ rader TypeScript · 30+ agenter · 22 moduler · 37 slash-commands · 30 kommandon**
+**85+ filer · 12 000+ rader TypeScript · 30+ agenter · 25 moduler · 37 slash-commands · 30 kommandon · 85 enhetstester · CI/CD · i18n (EN/SV)**
 
 ---
 
@@ -40,6 +40,15 @@ En modulär, utbyggbar agent-struktur för VS Code Chat med **30+ specialiserade
 | **Telemetry & Analytics** | Webview dashboard med grafer, success rate, trender |
 | **External Integrations** | Skapa GitHub Issues, Slack-meddelanden, Jira-tickets direkt |
 | **Agent Marketplace** | Bläddra, installera, publicera och betygsätt community-agenter |
+| **Response Cache** | LRU-cache för LLM-svar med TTL, eviction och agent-invalidering |
+| **i18n (EN/SV)** | Fullständigt tvåspråkigt stöd med `t()` translate-funktion |
+| **85 enhetstester** | Vitest med VS Code API-mock, 8 testfiler, v8 coverage |
+| **CI/CD** | GitHub Actions: build → lint → test → VSIX-paketering |
+| **E2E-tester** | `@vscode/test-electron` med integrationstester i riktig VS Code |
+| **16 inställningar** | Alla settings exponerade i VS Code Settings UI |
+| **8 tangentbordsgenvägar** | Cmd+Shift+A/D/S/H/N/U/T/M |
+| **Walkthrough** | 6-stegs interaktiv onboarding-guide |
+| **Welcome View** | Välkomstvy med knappar i tom sidebar |
 
 ---
 
@@ -54,27 +63,53 @@ En modulär, utbyggbar agent-struktur för VS Code Chat med **30+ specialiserade
 ### Installation
 
 ```bash
-# Klona repot
+# 1. Klona repot
 git clone https://github.com/ashsolei/vscode-agent.git
 cd vscode-agent
 
-# Installera beroenden
+# 2. Installera beroenden
 npm install
 
-# Kompilera
+# 3. Kompilera
 npm run compile
+
+# 4. Kör tester (valfritt men rekommenderas)
+npm test
 ```
 
-### Starta i debug-läge
+### Starta extensionen (debug-läge)
 
-1. Öppna projektet i VS Code:
-   ```bash
-   code .
-   ```
-2. Tryck **F5** (eller **Run → Start Debugging**)
-3. Ett nytt VS Code-fönster öppnas — extensionen är aktiv där
+```bash
+code .    # Öppna projektet i VS Code
+```
 
-### Använda agenterna
+1. Tryck **F5** (eller **Run → Start Debugging**)
+2. Ett nytt VS Code-fönster ("Extension Development Host") öppnas
+3. Extensionen är aktiv — du ser 🤖-ikonen i sidopanelen
+
+> **Tips:** Alternativt, öppna **Run and Debug** (⌘⇧D) och välj **"Run Extension"** från dropdown-menyn.
+
+### Walkthrough (interaktiv guide)
+
+Första gången extensionen startar kan du köra walkthrough:
+
+1. `⌘⇧P` → sök **"Getting Started with VS Code Agent"**
+2. Följ de 6 stegen: öppna chat → prova kommandon → aktivera profil → utforska sidebar → autonoma agenter → analytics
+
+### Installera som VSIX (utan debug)
+
+```bash
+# Paketera
+npm run package
+# → vscode-agent-0.1.0.vsix
+
+# Installera lokalt
+code --install-extension vscode-agent-0.1.0.vsix
+```
+
+---
+
+## 💬 Använda agenterna
 
 Öppna **Chat-panelen** (⌘⇧I / Ctrl+Shift+I) i debug-fönstret.
 
@@ -215,9 +250,12 @@ Klicka på **🤖-ikonen** i Activity Bar. Alla 26 agenter visas grupperade med 
 ```
 src/
 ├── extension.ts              # Entry point — kopplar ihop allt (~780 rader)
+├── __mocks__/
+│   └── vscode.ts             # Komplett VS Code API-mock (Vitest)
 ├── agents/                   # 30+ agenter + registry + basklass
 │   ├── base-agent.ts         # Abstrakt basklass (handle, chat, delegateTo)
 │   ├── index.ts              # AgentRegistry (routing, chaining, parallel, smart-router)
+│   ├── registry.test.ts      # ✅ 8 tester
 │   ├── code-agent.ts         # 💻 Kodgenerering
 │   ├── docs-agent.ts         # 📚 Dokumentation
 │   ├── task-agent.ts         # 📋 Uppgiftshantering
@@ -250,32 +288,62 @@ src/
 │   ├── testrunner-agent.ts   # 🧪 Tester + self-correct
 │   └── create-agent-agent.ts # 🧬 Meta-agent — skapar nya agenter
 ├── autonomous/               # AutonomousExecutor (filer, terminal, diagnostik)
+├── cache/                    # Response Cache (LRU med TTL)
+│   ├── response-cache.ts     # 💾 LRU-cache, eviction, invalidering
+│   ├── index.ts
+│   └── cache.test.ts         # ✅ 12 tester
 ├── collaboration/            # AgentCollaboration (vote, debate, consensus)
 ├── config/                   # ConfigManager (.agentrc.json)
 ├── context/                  # ContextProviderRegistry (git-diff, diagnostik, etc.)
 ├── conversations/            # ConversationPersistence (spara/återuppta chattar)
+│   ├── conversation-persistence.ts
+│   └── conversations.test.ts # ✅ 11 tester
 ├── dashboard/                # Webview Dashboard (realtidsstatistik)
 ├── diff/                     # DiffPreview (förhandsgranska ändringar)
 ├── events/                   # EventDrivenEngine (onSave, onDiagnostics, etc.)
 ├── guardrails/               # GuardRails (checkpoints, rollback, dry-run)
+├── i18n/                     # Internationalisering (EN + SV)
+│   ├── index.ts              # 🌍 t(), setLocale(), detectLocale(), 60+ nycklar
+│   └── i18n.test.ts          # ✅ 13 tester
 ├── integrations/             # ExternalIntegrations (GitHub, Slack, Jira)
 ├── marketplace/              # AgentMarketplace (browse, install, publish, rate)
 ├── memory/                   # AgentMemory (persistent minne mellan sessioner)
+│   ├── agent-memory.ts
+│   └── memory.test.ts        # ✅ 13 tester
 ├── middleware/                # MiddlewarePipeline (timing, usage, rate-limit)
 ├── models/                   # ModelSelector (per-agent LLM-val)
 ├── notifications/            # NotificationCenter (toast, historik, progress)
 ├── plugins/                  # PluginLoader (hot-reload .agent-plugins/*.json)
 ├── profiles/                 # AgentProfileManager (frontend/backend/review/etc.)
+│   ├── agent-profiles.ts
+│   └── profiles.test.ts      # ✅ 13 tester
 ├── prompts/                  # Systemprompter
 ├── snippets/                 # SnippetLibrary (spara, sök, infoga kodsnuttar)
+│   ├── snippet-library.ts
+│   └── snippets.test.ts      # ✅ 6 tester
 ├── state/                    # SharedState (cross-window sync)
 ├── statusbar/                # AgentStatusBar (aktiv agent, räknare, minne)
 ├── telemetry/                # TelemetryEngine (analytics, grafer, trender)
+│   ├── telemetry-engine.ts
+│   └── telemetry.test.ts     # ✅ 9 tester
+├── test/                     # E2E-tester
+│   └── e2e/
+│       ├── runTest.ts         # Test launcher
+│       └── suite/
+│           ├── index.ts       # Mocha test runner
+│           └── extension.test.ts # ✅ 6 integrationstester
 ├── tools/                    # ToolRegistry (FileTool, SearchTool)
 ├── views/                    # TreeView + CodeLens
 │   ├── agent-tree.ts         # Sidebar Tree View
 │   └── agent-codelens.ts     # CodeLens-integration
 └── workflow/                 # WorkflowEngine (JSON-pipelines)
+
+media/
+└── walkthrough/              # 6-stegs onboarding-guide
+    ├── step1.md … step6.md
+.github/
+└── workflows/
+    └── ci.yml                # GitHub Actions: build → lint → test → VSIX
 ```
 
 ### Arkitekturdiagram
@@ -294,7 +362,9 @@ graph TB
     COLLAB -->|"vote / debate / consensus"| REGISTRY
 
     REGISTRY -->|"resolve()"| MW["Middleware Pipeline"]
-    MW -->|"before → execute → after"| AGENTS["BaseAgent"]
+    MW -->|"before → execute → after"| CACHE["💾 Response Cache"]
+    CACHE -->|"miss"| AGENTS["BaseAgent"]
+    CACHE -->|"hit"| HANDLER
 
     subgraph "Infrastruktur"
         STATE["SharedState\n🔄 Cross-window"]
@@ -306,6 +376,7 @@ graph TB
         EVENTS["EventDrivenEngine\n🔔 onSave · onError"]
         CTX["ContextProviders\n📋 Git · Diagnostik"]
         MODELS["ModelSelector\n🤖 Per-agent LLM"]
+        I18N["i18n\n🌍 EN · SV"]
     end
 
     subgraph "Plattform"
@@ -320,6 +391,15 @@ graph TB
         DIFFPREV["📝 Diff Preview"]
         STATUSBAR["📊 Status Bar"]
         TELEMETRY["📈 Telemetri"]
+    end
+
+    subgraph "Kvalitet & CI/CD"
+        TESTS["✅ 85 Enhetstester\nVitest + v8 coverage"]
+        E2E["🧪 E2E-tester\n@vscode/test-electron"]
+        CI["🔄 GitHub Actions\nbuild → lint → test → VSIX"]
+        SETTINGS["⚙️ 16 Settings\nVS Code UI"]
+        KEYS["⌨️ 8 Genvägar\nCmd+Shift+*"]
+        WALK["📖 Walkthrough\n6-stegs onboarding"]
     end
 
     subgraph "30+ Agenter"
@@ -348,9 +428,10 @@ graph TB
     HANDLER -.-> CONVOS
     HANDLER -.-> NOTIFS
     A8 -.-> PLUGINS
+    AGENTS -.-> I18N
 
     subgraph "VS Code UI"
-        TREE["🌳 Sidebar Tree View"]
+        TREE["🌳 Sidebar + Welcome View"]
         LENS["🔍 CodeLens"]
         BAR["📊 Status Bar"]
         PROFILE_BAR["🎭 Profil i statusfält"]
@@ -367,7 +448,9 @@ sequenceDiagram
     participant C as Conversations
     participant R as Router/Registry
     participant MW as Middleware
+    participant $$ as Response Cache
     participant A as Agent
+    participant I as i18n
     participant T as Telemetry
     participant E as Executor
     participant G as GuardRails
@@ -379,14 +462,21 @@ sequenceDiagram
     H->>R: resolve("scaffold")
     R->>MW: execute(agent, ctx)
     MW->>MW: before (rate-limit, timing)
-    MW->>A: handle(ctx)
-    A->>G: createCheckpoint()
-    G-->>A: checkpoint-id
-    A->>E: createFiles([...])
-    E-->>A: ActionResult[]
-    A->>E: runCommand("npm install")
-    E-->>A: exit code 0
-    A-->>MW: AgentResult
+    MW->>$$: lookup(prompt, command)
+    alt Cache HIT
+        $$-->>H: cachat svar
+    else Cache MISS
+        $$->>A: handle(ctx)
+        A->>I: t('agent.processing')
+        A->>G: createCheckpoint()
+        G-->>A: checkpoint-id
+        A->>E: createFiles([...])
+        E-->>A: ActionResult[]
+        A->>E: runCommand("npm install")
+        E-->>A: exit code 0
+        A-->>$$: cache response
+        A-->>MW: AgentResult
+    end
     MW->>MW: after (usage-stats, timing)
     MW->>T: log(agentId, duration, success)
     MW-->>H: result
@@ -498,12 +588,102 @@ Skapa en `.agentrc.json` i ditt projekt (eller kör `Agent: Skapa .agentrc.json`
 
 ```bash
 npm install -g @vscode/vsce
-vsce package
+vsce package --no-dependencies
 # → vscode-agent-0.1.0.vsix
 
 # Installera lokalt:
 code --install-extension vscode-agent-0.1.0.vsix
+
+# Publicera till Marketplace:
+vsce publish --no-dependencies
 ```
+
+---
+
+## ⌨️ Tangentbordsgenvägar
+
+| Genväg (Mac) | Genväg (Win/Linux) | Kommando |
+|---|---|---|
+| `⌘⇧A` | `Ctrl+Shift+A` | Byt profil |
+| `⌘⇧D` | `Ctrl+Shift+D` | Visa Dashboard |
+| `⌘⇧S` | `Ctrl+Shift+S` | Visa Snippets |
+| `⌘⇧H` | `Ctrl+Shift+H` | Visa Konversationer |
+| `⌘⇧N` | `Ctrl+Shift+N` | Visa Notifieringar |
+| `⌘⇧U` | `Ctrl+Shift+U` | Ångra senaste ändring |
+| `⌘⇧T` | `Ctrl+Shift+T` | Visa Analytics |
+| `⌘⇧M` | `Ctrl+Shift+M` | Öppna Marketplace |
+
+---
+
+## ⚙️ Inställningar (Settings)
+
+Alla inställningar finns under **Settings → Extensions → VS Code Agent** (eller `vscodeAgent.*` i JSON):
+
+| Inställning | Typ | Standard | Beskrivning |
+|---|---|---|---|
+| `vscodeAgent.defaultProfile` | string | `""` | Standardprofil vid start (frontend, backend, etc.) |
+| `vscodeAgent.locale` | enum | `auto` | Språk: `auto`, `en`, `sv` |
+| `vscodeAgent.cache.enabled` | bool | `true` | Response-cache för upprepade prompts |
+| `vscodeAgent.cache.ttlMinutes` | number | `10` | Cache TTL i minuter |
+| `vscodeAgent.cache.maxEntries` | number | `200` | Max cachade svar |
+| `vscodeAgent.telemetry.enabled` | bool | `true` | Lokal telemetri (skickas aldrig externt) |
+| `vscodeAgent.guardrails.enabled` | bool | `true` | Guardrails med rollback |
+| `vscodeAgent.guardrails.dryRun` | bool | `false` | Dry-run mode (preview only) |
+| `vscodeAgent.memory.maxEntries` | number | `500` | Max antal agentminnen |
+| `vscodeAgent.memory.pruneAfterDays` | number | `30` | Auto-rensa minnen äldre än X dagar |
+| `vscodeAgent.codeLens.enabled` | bool | `true` | Visa CodeLens i källfiler |
+| `vscodeAgent.notifications.enabled` | bool | `true` | Notifieringar vid agenthändelser |
+| `vscodeAgent.models.default` | string | `auto` | Standard-LLM (gpt-4o, claude-3.5-sonnet, etc.) |
+| `vscodeAgent.autonomous.maxSteps` | number | `10` | Max steg för autonoma agenter |
+| `vscodeAgent.autonomous.confirmBeforeApply` | bool | `true` | Bekräfta innan autonoma ändringar |
+| `vscodeAgent.sidebar.showOnStartup` | bool | `false` | Visa sidebar automatiskt |
+
+---
+
+## 🧪 Testning
+
+```bash
+# Kör alla enhetstester
+npm test
+
+# Kör med watch mode
+npm run test:watch
+
+# Kör med coverage-rapport
+npm run test:coverage
+
+# Kör E2E-tester (kräver VS Code)
+npm run test:e2e
+```
+
+**Teststruktur:**
+- `src/**/*.test.ts` — Enhetstester (Vitest)
+- `src/__mocks__/vscode.ts` — Komplett VS Code API-mock
+- `src/test/e2e/` — E2E-tester med `@vscode/test-electron`
+
+**Testade moduler:**
+| Modul | Tester | Testar |
+|---|---|---|
+| AgentRegistry | 8 | register, resolve, delegate, chain |
+| AgentMemory | 13 | remember, forget, recall, search, findByTags, prune, stats |
+| ResponseCache | 12 | set, get, TTL, eviction, invalidate, prune, stats |
+| ConversationPersistence | 11 | add, list, search, tag, pin, startNew, load |
+| AgentProfileManager | 13 | activate, deactivate, create, duplicate, onDidChange |
+| SnippetLibrary | 6 | save, delete, search, toggleFavorite |
+| TelemetryEngine | 9 | log, overview, agentStats, dailySummary, clear |
+| i18n | 13 | translate, locale switch, fallback, format args |
+
+---
+
+## 🔄 CI/CD
+
+GitHub Actions körs automatiskt vid push/PR till `main`:
+
+```
+Build (Node 18 + 20)  →  Lint  →  Test  →  Package VSIX
+```
+
+VSIX-artefakten laddas upp och kan hämtas från Actions-fliken.
 
 ---
 
