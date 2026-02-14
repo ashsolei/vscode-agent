@@ -157,6 +157,10 @@
             "description": "🧬 Skapa nya agenter dynamiskt med AI"
           },
           {
+            "name": "health",
+            "description": "🏥 Systemdiagnostik och hälsokontroll"
+          },
+          {
             "name": "collab-vote",
             "description": "🗳️ Flera agenter röstar på bästa lösningen"
           },

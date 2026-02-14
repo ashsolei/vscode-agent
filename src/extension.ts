@@ -53,6 +53,7 @@ import { ModelSelector } from './models';
 import { AgentCollaboration } from './collaboration';
 import { ContextProviderRegistry } from './context';
 import { CreateAgentAgent } from './agents/create-agent-agent';
+import { HealthAgent } from './agents/health-agent';
 import { SnippetLibrary } from './snippets';
 import { NotificationCenter } from './notifications';
 import { AgentProfileManager } from './profiles';
@@ -233,6 +234,7 @@ export function activate(context: vscode.ExtensionContext) {
   registry.register(new FullstackAgent());
   registry.register(new TestRunnerAgent());
   registry.register(new CreateAgentAgent());
+  registry.register(new HealthAgent(registry));
 
   // Standardagenten är code
   registry.setDefault('code');
