@@ -14,7 +14,7 @@
  */
 export function sanitizePath(relativePath: string): string {
   // Ersätt bakåtsnedstreck med framåtsnedstreck
-  let normalized = relativePath.replace(/\\/g, '/');
+  const normalized = relativePath.replace(/\\/g, '/');
 
   // Kontrollera om sökvägen är absolut
   if (normalized.startsWith('/') || /^[a-zA-Z]:/.test(normalized)) {
@@ -110,6 +110,7 @@ export function validateAgentId(id: string): boolean {
  */
 export function sanitizeForLog(text: string, maxLength: number = 500): string {
   // Ersätt kontrolltecken (utom vanliga whitespace-tecken som \n, \r, \t)
+  // eslint-disable-next-line no-control-regex
   const cleaned = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
   if (cleaned.length <= maxLength) {
     return cleaned;
