@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MiddlewarePipeline } from './middleware';
+import { MiddlewarePipeline, createRateLimitMiddleware } from './middleware';
 import type { Middleware, MiddlewareInfo } from './middleware';
 import type { BaseAgent, AgentContext, AgentResult } from '../agents/base-agent';
 
@@ -141,5 +141,65 @@ describe('MiddlewarePipeline', () => {
     );
 
     expect(capturedMeta['tag']).toBe('hello');
+  });
+});
+
+describe('createRateLimitMiddleware', () => {
+  let pipeline: MiddlewarePipeline;
+
+  beforeEach(() => {
+    pipeline = new MiddlewarePipeline();
+    vi.useRealTimers();
+  });
+
+  it('tillåter anrop under gränsen', async () => {
+    const mw = createRateLimitMiddleware(5);
+    pipeline.use(mw);
+
+    const agent = makeAgent('a', async () => ({ content: 'ok', metadata: {} }));
+
+    for (let i = 0; i < 3; i++) {
+      const result = await pipeline.execute(agent, makeCtx());
+      expect(result.content).toBe('ok');
+      expect(result.metadata?.skippedBy).toBeUndefined();
+    }
+  });
+
+  it('blockerar anrop över gränsen', async () => {
+    const mw = createRateLimitMiddleware(2);
+    pipeline.use(mw);
+
+    const agent = makeAgent('a', async () => ({ content: 'ok', metadata: {} }));
+
+    const r1 = await pipeline.execute(agent, makeCtx());
+    expect(r1.metadata?.skippedBy).toBeUndefined();
+
+    const r2 = await pipeline.execute(agent, makeCtx());
+    expect(r2.metadata?.skippedBy).toBeUndefined();
+
+    const ctx3 = makeCtx();
+    const r3 = await pipeline.execute(agent, ctx3);
+    expect(r3.metadata?.skippedBy).toBe('rate-limit');
+    expect(ctx3.stream.markdown).toHaveBeenCalled();
+  });
+
+  it('återställer efter timeout', async () => {
+    vi.useFakeTimers();
+
+    const mw = createRateLimitMiddleware(1);
+    pipeline.use(mw);
+
+    const agent = makeAgent('a', async () => ({ content: 'ok', metadata: {} }));
+
+    const r1 = await pipeline.execute(agent, makeCtx());
+    expect(r1.metadata?.skippedBy).toBeUndefined();
+
+    vi.advanceTimersByTime(61_000);
+
+    const r2 = await pipeline.execute(agent, makeCtx());
+    expect(r2.content).toBe('ok');
+    expect(r2.metadata?.skippedBy).toBeUndefined();
+
+    vi.useRealTimers();
   });
 });
