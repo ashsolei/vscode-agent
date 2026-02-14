@@ -124,8 +124,10 @@ export class GuardRails {
       try {
         await vscode.workspace.fs.writeFile(snap.uri, snap.content);
         restoredFiles++;
-      } catch {
-        // Kunde inte återställa
+      } catch (err) {
+        this.stream?.markdown(
+          `\n⚠️ Kunde inte återställa fil: ${snap.uri.fsPath} — ${err}\n`
+        );
       }
     }
 
@@ -134,8 +136,10 @@ export class GuardRails {
       try {
         await vscode.workspace.fs.delete(uri);
         deletedFiles++;
-      } catch {
-        // Filen fanns kanske inte längre
+      } catch (err) {
+        this.stream?.markdown(
+          `\n⚠️ Kunde inte ta bort fil: ${uri.fsPath} — ${err}\n`
+        );
       }
     }
 

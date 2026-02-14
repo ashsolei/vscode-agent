@@ -5,6 +5,9 @@ import * as vscode from 'vscode';
  * Allt konfigureras via .agentrc.json → integrations.
  */
 
+/** Standard-timeout för HTTP-förfrågningar (30 sekunder) */
+const HTTP_TIMEOUT_MS = 30_000;
+
 export interface IntegrationConfig {
   github?: { token?: string; repo?: string };
   slack?: { webhookUrl?: string; channel?: string };
@@ -78,6 +81,7 @@ export class ExternalIntegrations implements vscode.Disposable {
           'User-Agent': 'vscode-agent',
         },
         body: JSON.stringify({ title, body, labels: labels ?? [] }),
+        signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
       });
 
       if (!response.ok) {
@@ -111,7 +115,7 @@ export class ExternalIntegrations implements vscode.Disposable {
     try {
       const response = await fetch(
         `https://api.github.com/repos/${effectiveRepo}/issues?state=open&per_page=${limit}`,
-        { headers }
+        { headers, signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) }
       );
 
       if (!response.ok) {
@@ -154,6 +158,7 @@ export class ExternalIntegrations implements vscode.Disposable {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
       });
 
       if (!response.ok) {
@@ -230,6 +235,7 @@ export class ExternalIntegrations implements vscode.Disposable {
             issuetype: { name: issueType },
           },
         }),
+        signal: AbortSignal.timeout(HTTP_TIMEOUT_MS),
       });
 
       if (!response.ok) {

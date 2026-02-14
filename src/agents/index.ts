@@ -19,6 +19,8 @@ export interface ChainStep {
 export class AgentRegistry {
   private agents = new Map<string, BaseAgent>();
   private defaultAgent: BaseAgent | undefined;
+  /** Maximalt antal steg i en agentkedja */
+  static readonly MAX_CHAIN_DEPTH = 20;
 
   /**
    * Registrera en agent. Det första registrerade agenten blir standard.
@@ -125,6 +127,12 @@ export class AgentRegistry {
     steps: ChainStep[],
     ctx: AgentContext
   ): Promise<Array<{ agentId: string; result: AgentResult; text: string }>> {
+    if (steps.length > AgentRegistry.MAX_CHAIN_DEPTH) {
+      throw new Error(
+        `Agentkedjan överskrider maxdjupet (${AgentRegistry.MAX_CHAIN_DEPTH} steg). Fick ${steps.length} steg.`
+      );
+    }
+
     const results: Array<{ agentId: string; result: AgentResult; text: string }> = [];
     let previousOutput = '';
 

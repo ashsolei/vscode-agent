@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { sanitizePath, isCommandSafe } from '../utils/validation';
 
 /**
  * Resultat från en autonom åtgärd.
@@ -40,7 +41,8 @@ export class AutonomousExecutor {
     }
 
     try {
-      const uri = vscode.Uri.joinPath(ws.uri, relativePath);
+      const safePath = sanitizePath(relativePath);
+      const uri = vscode.Uri.joinPath(ws.uri, safePath);
       await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(content));
       this.stream.progress(`✅ Skapade ${relativePath}`);
       return this.record('createFile', true, `Skapade ${relativePath}`, [relativePath]);
@@ -57,7 +59,8 @@ export class AutonomousExecutor {
     if (!ws) { return null; }
 
     try {
-      const uri = vscode.Uri.joinPath(ws.uri, relativePath);
+      const safePath = sanitizePath(relativePath);
+      const uri = vscode.Uri.joinPath(ws.uri, safePath);
       const content = await vscode.workspace.fs.readFile(uri);
       return new TextDecoder().decode(content);
     } catch {
@@ -73,7 +76,8 @@ export class AutonomousExecutor {
     if (!ws) { return false; }
 
     try {
-      const uri = vscode.Uri.joinPath(ws.uri, relativePath);
+      const safePath = sanitizePath(relativePath);
+      const uri = vscode.Uri.joinPath(ws.uri, safePath);
       await vscode.workspace.fs.stat(uri);
       return true;
     } catch {
@@ -90,7 +94,7 @@ export class AutonomousExecutor {
 
     try {
       const uri = relativePath
-        ? vscode.Uri.joinPath(ws.uri, relativePath)
+        ? vscode.Uri.joinPath(ws.uri, sanitizePath(relativePath))
         : ws.uri;
       const entries = await vscode.workspace.fs.readDirectory(uri);
       return entries.map(([name, type]) => ({
@@ -146,7 +150,8 @@ export class AutonomousExecutor {
     const ws = vscode.workspace.workspaceFolders?.[0];
     if (!ws) { return; }
 
-    const uri = vscode.Uri.joinPath(ws.uri, relativePath);
+    const safePath = sanitizePath(relativePath);
+    const uri = vscode.Uri.joinPath(ws.uri, safePath);
     const doc = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(doc, { preview: false });
   }
@@ -165,7 +170,8 @@ export class AutonomousExecutor {
     }
 
     try {
-      const uri = vscode.Uri.joinPath(ws.uri, relativePath);
+      const safePath = sanitizePath(relativePath);
+      const uri = vscode.Uri.joinPath(ws.uri, safePath);
       const content = await vscode.workspace.fs.readFile(uri);
       const text = new TextDecoder().decode(content);
 
@@ -203,7 +209,8 @@ export class AutonomousExecutor {
     }
 
     try {
-      const uri = vscode.Uri.joinPath(ws.uri, relativePath);
+      const safePath = sanitizePath(relativePath);
+      const uri = vscode.Uri.joinPath(ws.uri, safePath);
       await vscode.workspace.fs.delete(uri);
       this.stream.progress(`🗑️ Tog bort ${relativePath}`);
       return this.record('deleteFile', true, `Tog bort ${relativePath}`, [relativePath]);
@@ -259,6 +266,11 @@ export class AutonomousExecutor {
 
     if (!cwd) {
       return this.record('runCommand', false, 'Ingen arbetsyta öppen');
+    }
+
+    // Säkerhetskontroll — blockera potentiellt farliga kommandon
+    if (!isCommandSafe(command)) {
+      return this.record('runCommand', false, `Kommandot blockerades av säkerhetskontrollen: ${command}`);
     }
 
     const termName = options?.name ?? `Agent: ${command.slice(0, 30)}`;
