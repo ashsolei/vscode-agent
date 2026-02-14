@@ -17,3 +17,5 @@ vitest.config.ts
 **/__mocks__/**
 *.map
 CONTRIBUTING.md
+Dockerfile
+.dockerignore

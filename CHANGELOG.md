@@ -5,6 +5,30 @@ All notable changes to the **VS Code Agent** extension will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-02-14
+
+### Changed
+- Upgraded Vitest from 2.x to 3.2.4 for latest test runner improvements
+- Upgraded @vitest/coverage-v8 to 3.2.4
+- Pinned TypeScript to ~5.5.0 for full eslint compatibility
+
+### Fixed
+- Resolved all npm audit security vulnerabilities (8 → 0)
+  - Fixed esbuild development server request vulnerability (GHSA-67mh-4wv8-2f99)
+  - Fixed markdown-it ReDoS vulnerability (GHSA-38c4-r59v-3vqw)
+  - Fixed qs arrayLimit bypass (GHSA-w7fw-mjwx-w883)
+
+### Added
+- Dockerfile with multi-stage build (build → package → runtime)
+- .dockerignore for optimized Docker builds
+- Docker build and push instructions in README
+
+### Infrastructure
+- All 99 unit tests passing on Vitest 3.2.4
+- Zero npm audit vulnerabilities
+- Clean TypeScript compilation with strict mode
+- Clean ESLint pass with no warnings
+
 ## [0.1.0] - 2025-02-10
 
 ### Added
