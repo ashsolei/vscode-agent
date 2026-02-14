@@ -2,7 +2,7 @@
   "name": "vscode-agent",
   "displayName": "VS Code Agent",
   "description": "A modular multi-agent system for VS Code Chat with cross-window state, autonomous agents, workflows, and collaboration",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "ashsolei",
   "license": "MIT",
   "repository": {
@@ -384,7 +384,11 @@
         "vscodeAgent.locale": {
           "type": "string",
           "default": "auto",
-          "enum": ["auto", "en", "sv"],
+          "enum": [
+            "auto",
+            "en",
+            "sv"
+          ],
           "enumDescriptions": [
             "Auto-detect from VS Code language",
             "English",
@@ -556,12 +560,12 @@
     "@types/vscode": "^1.93.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
-    "@vitest/coverage-v8": "^2.0.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "@vscode/test-electron": "^2.3.8",
     "@vscode/vsce": "^3.0.0",
     "eslint": "^8.56.0",
     "glob": "^10.3.10",
     "typescript": "^5.3.0",
-    "vitest": "^2.0.0"
+    "vitest": "^4.0.18"
   }
 }

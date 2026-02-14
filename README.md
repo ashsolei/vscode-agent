@@ -2,7 +2,7 @@
 
 En modulär, utbyggbar agent-struktur för VS Code Chat med **30+ specialiserade AI-agenter**, autonoma filändringar, cross-window-synkronisering, marketplace, telemetri och en komplett utvecklingsplattform.
 
-**85+ filer · 12 000+ rader TypeScript · 30+ agenter · 25 moduler · 37 slash-commands · 30 kommandon · 85 enhetstester · CI/CD · i18n (EN/SV)**
+**85+ filer · 12 000+ rader TypeScript · 30+ agenter · 25 moduler · 37 slash-commands · 30 kommandon · 99 enhetstester · CI/CD · Docker · i18n (EN/SV)**
 
 ---
 
@@ -42,8 +42,9 @@ En modulär, utbyggbar agent-struktur för VS Code Chat med **30+ specialiserade
 | **Agent Marketplace** | Bläddra, installera, publicera och betygsätt community-agenter |
 | **Response Cache** | LRU-cache för LLM-svar med TTL, eviction och agent-invalidering |
 | **i18n (EN/SV)** | Fullständigt tvåspråkigt stöd med `t()` translate-funktion |
-| **85 enhetstester** | Vitest med VS Code API-mock, 8 testfiler, v8 coverage |
+| **99 enhetstester** | Vitest med VS Code API-mock, 11 testfiler, v8 coverage |
 | **CI/CD** | GitHub Actions: build → lint → test → VSIX-paketering |
+| **Docker** | Multi-stage Dockerfile med Node 20 Alpine för produktion |
 | **E2E-tester** | `@vscode/test-electron` med integrationstester i riktig VS Code |
 | **16 inställningar** | Alla settings exponerade i VS Code Settings UI |
 | **8 tangentbordsgenvägar** | Cmd+Shift+A/D/S/H/N/U/T/M |
@@ -394,7 +395,7 @@ graph TB
     end
 
     subgraph "Kvalitet & CI/CD"
-        TESTS["✅ 85 Enhetstester\nVitest + v8 coverage"]
+        TESTS["✅ 99 Enhetstester\nVitest + v8 coverage"]
         E2E["🧪 E2E-tester\n@vscode/test-electron"]
         CI["🔄 GitHub Actions\nbuild → lint → test → VSIX"]
         SETTINGS["⚙️ 16 Settings\nVS Code UI"]
@@ -589,14 +590,34 @@ Skapa en `.agentrc.json` i ditt projekt (eller kör `Agent: Skapa .agentrc.json`
 ```bash
 npm install -g @vscode/vsce
 vsce package --no-dependencies
-# → vscode-agent-0.1.0.vsix
+# → vscode-agent-0.2.0.vsix
 
 # Installera lokalt:
-code --install-extension vscode-agent-0.1.0.vsix
+code --install-extension vscode-agent-0.2.0.vsix
 
 # Publicera till Marketplace:
 vsce publish --no-dependencies
 ```
+
+---
+
+## 🐳 Docker
+
+Bygg och kör Docker-imagen:
+
+```bash
+# Bygg imagen
+docker build -t vscode-agent .
+
+# Kör containern
+docker run --rm vscode-agent
+
+# Tagga och pusha till lokalt register
+docker tag vscode-agent localhost:5000/vscode-agent:latest
+docker push localhost:5000/vscode-agent:latest
+```
+
+Dockerfilen använder en multi-stage build med Node 20 Alpine för minimal storlek.
 
 ---
 

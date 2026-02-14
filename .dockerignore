@@ -1,0 +1,12 @@
+node_modules
+out
+coverage
+.vscode-test
+.git
+.github
+*.vsix
+.DS_Store
+vitest.config.js
+vitest.config.d.ts
+vitest.config.js.map
+scripts/

@@ -5,6 +5,23 @@ All notable changes to the **VS Code Agent** extension will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-02-14
+
+### Added
+- **Dockerfile** for production-ready container builds (multi-stage, Node 20 Alpine)
+- **.dockerignore** to optimize Docker build context
+
+### Changed
+- Upgraded `vitest` and `@vitest/coverage-v8` from v2 to v4 to resolve security vulnerabilities
+- Upgraded transitive dependencies (`markdown-it`, `qs`) to fix moderate vulnerabilities
+
+### Fixed
+- Resolved 8 npm audit vulnerabilities (markdown-it ReDoS, qs denial of service, esbuild dev server)
+
+### Infrastructure
+- Docker image uses multi-stage build for minimal production image size
+- All 99 unit tests passing on vitest v4
+
 ## [0.1.0] - 2025-02-10
 
 ### Added
