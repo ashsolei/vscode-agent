@@ -26,7 +26,7 @@ export class CreateAgentAgent extends BaseAgent {
   }
 
   async handle(ctx: AgentContext): Promise<AgentResult> {
-    const executor = new AutonomousExecutor(ctx.stream);
+    const executor = new AutonomousExecutor(ctx.stream, this.diffPreview);
     const prompt = ctx.request.prompt.toLowerCase();
 
     if (prompt.includes('template') || prompt.includes('mall')) {

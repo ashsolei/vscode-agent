@@ -41,6 +41,10 @@ export class EventDrivenEngine {
   private lastTrigger = new Map<string, number>();
   private outputChannel: vscode.OutputChannel;
 
+  /** Event som avfyras när en regel triggas */
+  private _onDidTrigger = new vscode.EventEmitter<{ ruleId: string; agentId: string; event: string }>();
+  readonly onDidTrigger = this._onDidTrigger.event;
+
   constructor(
     private registry: AgentRegistry,
     private globalState: vscode.Memento
@@ -203,6 +207,9 @@ export class EventDrivenEngine {
 
     this.log(`🔔 Triggade regel "${rule.id}" → ${agent.name}: ${prompt.slice(0, 80)}`);
 
+    // Avfyra event för NotificationCenter-integration
+    this._onDidTrigger.fire({ ruleId: rule.id, agentId: rule.agentId, event: rule.event });
+
     // Öppna chatten med agenten och prompt
     vscode.commands.executeCommand('workbench.action.chat.open', {
       query: `@agent /${rule.agentId} ${prompt}`,
@@ -307,6 +314,7 @@ export class EventDrivenEngine {
   dispose(): void {
     for (const d of this.disposables) { d.dispose(); }
     for (const i of this.intervals) { clearInterval(i); }
+    this._onDidTrigger.dispose();
     this.outputChannel.dispose();
   }
 }

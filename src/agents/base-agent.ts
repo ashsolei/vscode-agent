@@ -384,6 +384,22 @@ export abstract class BaseAgent {
   }
 
   // ─────────────────────────────────────────────────────
+  //  📋 DiffPreview (kräver injection)
+  // ─────────────────────────────────────────────────────
+
+  private _diffPreview?: import('../diff/diff-preview').DiffPreview;
+
+  /** Injiceras av extension.ts efter registrering */
+  setDiffPreview(dp: import('../diff/diff-preview').DiffPreview): void {
+    this._diffPreview = dp;
+  }
+
+  /** Åtkomst till DiffPreview, undefined om ej injicerat */
+  protected get diffPreview(): import('../diff/diff-preview').DiffPreview | undefined {
+    return this._diffPreview;
+  }
+
+  // ─────────────────────────────────────────────────────
   //  🔗 Delegation helpers (kräver AgentRegistry injection)
   // ─────────────────────────────────────────────────────
 

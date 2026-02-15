@@ -66,7 +66,45 @@ export interface WorkflowStepResult {
  * - Output-piping mellan steg
  */
 export class WorkflowEngine {
+  private customWorkflows = new Map<string, WorkflowDefinition>();
+
   constructor(private registry: AgentRegistry) {}
+
+  /**
+   * Registrera en namngiven custom workflow.
+   * Överskriver befintlig workflow med samma namn.
+   */
+  registerWorkflow(name: string, wf: WorkflowDefinition): void {
+    this.customWorkflows.set(name, wf);
+  }
+
+  /**
+   * Hämta en registrerad custom workflow via namn.
+   */
+  getWorkflow(name: string): WorkflowDefinition | undefined {
+    return this.customWorkflows.get(name);
+  }
+
+  /**
+   * Lista alla registrerade custom workflow-namn.
+   */
+  listWorkflows(): string[] {
+    return [...this.customWorkflows.keys()];
+  }
+
+  /**
+   * Ta bort en registrerad custom workflow.
+   */
+  removeWorkflow(name: string): boolean {
+    return this.customWorkflows.delete(name);
+  }
+
+  /**
+   * Rensa alla custom workflows.
+   */
+  clearWorkflows(): void {
+    this.customWorkflows.clear();
+  }
 
   /**
    * Kör en workflow.

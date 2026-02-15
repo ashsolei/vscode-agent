@@ -137,6 +137,21 @@ describe('EventDrivenEngine', () => {
     });
   });
 
+  describe('onDidTrigger event', () => {
+    it('should expose onDidTrigger event', () => {
+      expect(engine.onDidTrigger).toBeDefined();
+      expect(typeof engine.onDidTrigger).toBe('function');
+    });
+
+    it('should allow subscribing without error', () => {
+      const handler = vi.fn();
+      const disposable = engine.onDidTrigger(handler);
+      expect(disposable).toBeDefined();
+      expect(typeof disposable.dispose).toBe('function');
+      disposable.dispose();
+    });
+  });
+
   describe('activate', () => {
     it('should setup event listeners', () => {
       engine.addRule(makeRule());

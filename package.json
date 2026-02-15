@@ -183,6 +183,10 @@
           {
             "name": "workflow-fix",
             "description": "🔄 Workflow: Autofix → Test → Säkerhetskontroll"
+          },
+          {
+            "name": "workflow-run",
+            "description": "🔄 Kör en namngiven custom workflow från .agentrc.json"
           }
         ]
       }

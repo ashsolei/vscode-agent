@@ -676,4 +676,80 @@ describe('WorkflowEngine', () => {
       expect(results[0].success).toBe(true);
     });
   });
+
+  // ─── Custom workflows (registrering) ───
+
+  describe('custom workflows', () => {
+    it('registerWorkflow sparar och getWorkflow hämtar', () => {
+      const wf = makeWorkflow({ name: 'my-wf' });
+      engine.registerWorkflow('my-wf', wf);
+
+      const retrieved = engine.getWorkflow('my-wf');
+      expect(retrieved).toBeDefined();
+      expect(retrieved!.name).toBe('my-wf');
+    });
+
+    it('listWorkflows returnerar alla registrerade namn', () => {
+      engine.registerWorkflow('wf-a', makeWorkflow({ name: 'wf-a' }));
+      engine.registerWorkflow('wf-b', makeWorkflow({ name: 'wf-b' }));
+      engine.registerWorkflow('wf-c', makeWorkflow({ name: 'wf-c' }));
+
+      const names = engine.listWorkflows();
+      expect(names).toHaveLength(3);
+      expect(names).toContain('wf-a');
+      expect(names).toContain('wf-b');
+      expect(names).toContain('wf-c');
+    });
+
+    it('removeWorkflow tar bort en enskild workflow', () => {
+      engine.registerWorkflow('remove-me', makeWorkflow({ name: 'remove-me' }));
+      expect(engine.listWorkflows()).toContain('remove-me');
+
+      const removed = engine.removeWorkflow('remove-me');
+      expect(removed).toBe(true);
+      expect(engine.getWorkflow('remove-me')).toBeUndefined();
+    });
+
+    it('removeWorkflow returnerar false om workflow inte finns', () => {
+      expect(engine.removeWorkflow('nonexistent')).toBe(false);
+    });
+
+    it('clearWorkflows rensar alla custom workflows', () => {
+      engine.registerWorkflow('a', makeWorkflow({ name: 'a' }));
+      engine.registerWorkflow('b', makeWorkflow({ name: 'b' }));
+      expect(engine.listWorkflows()).toHaveLength(2);
+
+      engine.clearWorkflows();
+      expect(engine.listWorkflows()).toHaveLength(0);
+    });
+
+    it('registerWorkflow skriver över existerande med samma namn', () => {
+      const wf1 = makeWorkflow({ name: 'dup', description: 'first' });
+      const wf2 = makeWorkflow({ name: 'dup', description: 'second' });
+
+      engine.registerWorkflow('dup', wf1);
+      engine.registerWorkflow('dup', wf2);
+
+      expect(engine.listWorkflows()).toHaveLength(1);
+      expect(engine.getWorkflow('dup')!.description).toBe('second');
+    });
+
+    it('getWorkflow returnerar undefined för okänd workflow', () => {
+      expect(engine.getWorkflow('unknown')).toBeUndefined();
+    });
+
+    it('registrerad custom workflow kan köras via run()', async () => {
+      const wf = makeWorkflow({
+        name: 'runnable',
+        steps: [makeStep({ name: 'step1', agentId: 'code', prompt: 'Hello' })],
+      });
+
+      engine.registerWorkflow('runnable', wf);
+      const retrieved = engine.getWorkflow('runnable')!;
+      const results = await engine.run(retrieved, ctx);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].success).toBe(true);
+    });
+  });
 });

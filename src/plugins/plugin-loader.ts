@@ -67,7 +67,7 @@ class PluginAgent extends BaseAgent {
 
     // Om autonom, ge tillgång till executor
     if (this.definition.autonomous) {
-      const executor = new AutonomousExecutor(ctx.stream);
+      const executor = new AutonomousExecutor(ctx.stream, this.diffPreview);
       const prompt = `${systemPrompt}
 
 Du har tillgång till följande autonoma kapabiliteter:

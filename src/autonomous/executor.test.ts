@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { workspace, Uri, FileType } from '../__mocks__/vscode';
 import { AutonomousExecutor, ActionResult } from './executor';
+import type { DiffPreview } from '../diff/diff-preview';
 
 // Setup workspace mock
 function setupWorkspace(root = '/workspace') {
@@ -19,6 +20,20 @@ function makeMockStream() {
     filetree: vi.fn(),
     push: vi.fn(),
   };
+}
+
+function makeMockDiffPreview(): DiffPreview {
+  return {
+    addDiff: vi.fn(),
+    addDiffs: vi.fn(),
+    clear: vi.fn(),
+    get count() { return 0; },
+    showPreview: vi.fn(),
+    showFileDiff: vi.fn(),
+    applyDiffs: vi.fn(),
+    reviewAndApply: vi.fn().mockResolvedValue({ applied: 0, rejected: 0 }),
+    dispose: vi.fn(),
+  } as any;
 }
 
 describe('AutonomousExecutor', () => {
@@ -264,6 +279,105 @@ describe('AutonomousExecutor', () => {
       (workspace.fs.readFile as any).mockRejectedValueOnce(new Error('not found'));
       const json = await executor.readJsonFile('missing.json');
       expect(json).toBeNull();
+    });
+  });
+
+  // ─── DiffPreview Integration ─────────────────────────
+
+  describe('DiffPreview integration', () => {
+    let diffPreview: DiffPreview;
+    let previewExecutor: AutonomousExecutor;
+
+    beforeEach(() => {
+      diffPreview = makeMockDiffPreview();
+      previewExecutor = new AutonomousExecutor(stream as any, diffPreview);
+      setupWorkspace();
+    });
+
+    describe('createFile with DiffPreview', () => {
+      it('should route to DiffPreview instead of writing directly', async () => {
+        const result = await previewExecutor.createFile('src/new.ts', 'content');
+        expect(result.success).toBe(true);
+        expect(result.detail).toContain('Förhandsgranskad');
+        expect(diffPreview.addDiff).toHaveBeenCalledWith({
+          path: 'src/new.ts',
+          type: 'create',
+          proposed: 'content',
+        });
+        expect(workspace.fs.writeFile).not.toHaveBeenCalled();
+      });
+
+      it('should show preview progress message', async () => {
+        await previewExecutor.createFile('src/new.ts', 'content');
+        expect(stream.progress).toHaveBeenCalledWith(expect.stringContaining('📋'));
+      });
+    });
+
+    describe('editFile with DiffPreview', () => {
+      it('should route edits to DiffPreview', async () => {
+        (workspace.fs.readFile as any).mockResolvedValueOnce(Buffer.from('const x = 1;'));
+        const result = await previewExecutor.editFile('src/app.ts', 'const x = 1', 'const x = 42');
+        expect(result.success).toBe(true);
+        expect(result.detail).toContain('Förhandsgranskad');
+        expect(diffPreview.addDiff).toHaveBeenCalledWith({
+          path: 'src/app.ts',
+          type: 'modify',
+          original: 'const x = 1;',
+          proposed: 'const x = 42;',
+        });
+        expect(workspace.fs.writeFile).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('deleteFile with DiffPreview', () => {
+      it('should route deletes to DiffPreview', async () => {
+        (workspace.fs.readFile as any).mockResolvedValueOnce(Buffer.from('old content'));
+        const result = await previewExecutor.deleteFile('src/old.ts');
+        expect(result.success).toBe(true);
+        expect(result.detail).toContain('Förhandsgranskad');
+        expect(diffPreview.addDiff).toHaveBeenCalledWith({
+          path: 'src/old.ts',
+          type: 'delete',
+          original: 'old content',
+        });
+        expect(workspace.fs.delete).not.toHaveBeenCalled();
+      });
+
+      it('should handle missing file during delete preview', async () => {
+        (workspace.fs.readFile as any).mockRejectedValueOnce(new Error('not found'));
+        const result = await previewExecutor.deleteFile('src/missing.ts');
+        expect(result.success).toBe(true);
+        expect(diffPreview.addDiff).toHaveBeenCalledWith({
+          path: 'src/missing.ts',
+          type: 'delete',
+          original: undefined,
+        });
+      });
+    });
+
+    describe('createFiles with DiffPreview', () => {
+      it('should route all files through DiffPreview', async () => {
+        const files = [
+          { path: 'src/a.ts', content: 'a' },
+          { path: 'src/b.ts', content: 'b' },
+        ];
+        const results = await previewExecutor.createFiles(files);
+        expect(results.length).toBe(2);
+        expect(results.every(r => r.success)).toBe(true);
+        expect(diffPreview.addDiff).toHaveBeenCalledTimes(2);
+        expect(workspace.fs.writeFile).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('without DiffPreview', () => {
+      it('should write directly when no DiffPreview is set', async () => {
+        const directExecutor = new AutonomousExecutor(stream as any);
+        setupWorkspace();
+        const result = await directExecutor.createFile('src/direct.ts', 'content');
+        expect(result.success).toBe(true);
+        expect(result.detail).toContain('Skapade');
+        expect(workspace.fs.writeFile).toHaveBeenCalled();
+      });
     });
   });
 });

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { DiffPreview } from '../diff/diff-preview';
 
 /**
  * Resultat från en autonom åtgärd.
@@ -19,11 +20,19 @@ export interface ActionResult {
  * - Analysera hela arbetsytan
  * - Skapa flera filer i en sekvens (scaffolding)
  * - Rapportera framsteg i realtid via ChatResponseStream
+ * - Förhandsgranska ändringar via DiffPreview (om tillgängligt)
  */
 export class AutonomousExecutor {
   private actionLog: ActionResult[] = [];
 
-  constructor(private stream: vscode.ChatResponseStream) {}
+  /**
+   * @param stream ChatResponseStream för progress-rapportering
+   * @param diffPreview Om satt, samlas ändringar för förhandsgranskning istället för direkt skrivning
+   */
+  constructor(
+    private stream: vscode.ChatResponseStream,
+    private diffPreview?: DiffPreview
+  ) {}
 
   /**
    * Validera att en relativ sökväg inte leder utanför arbetsytan.
@@ -52,6 +61,7 @@ export class AutonomousExecutor {
 
   /**
    * Skapa en ny fil i arbetsytan.
+   * Om DiffPreview är aktivt samlas ändringen för förhandsgranskning.
    */
   async createFile(relativePath: string, content: string): Promise<ActionResult> {
     const ws = vscode.workspace.workspaceFolders?.[0];
@@ -60,6 +70,18 @@ export class AutonomousExecutor {
     }
 
     try {
+      this.validatePath(relativePath, ws);
+
+      if (this.diffPreview) {
+        this.diffPreview.addDiff({
+          path: relativePath,
+          type: 'create',
+          proposed: content,
+        });
+        this.stream.progress(`📋 Förhandsgranskad: ${relativePath} (ny fil)`);
+        return this.record('createFile', true, `Förhandsgranskad: ${relativePath}`, [relativePath]);
+      }
+
       const uri = this.validatePath(relativePath, ws);
       await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(content));
       this.stream.progress(`✅ Skapade ${relativePath}`);
@@ -174,6 +196,7 @@ export class AutonomousExecutor {
 
   /**
    * Applicera en textredigering på en befintlig fil.
+   * Om DiffPreview är aktivt samlas ändringen för förhandsgranskning.
    * @param replaceAll Om true, ersätts alla förekomster av searchText (default: false).
    */
   async editFile(
@@ -199,6 +222,18 @@ export class AutonomousExecutor {
       const newText = replaceAll
         ? text.replaceAll(searchText, replaceText)
         : text.replace(searchText, replaceText);
+
+      if (this.diffPreview) {
+        this.diffPreview.addDiff({
+          path: relativePath,
+          type: 'modify',
+          original: text,
+          proposed: newText,
+        });
+        this.stream.progress(`📋 Förhandsgranskad: ${relativePath} (redigering)`);
+        return this.record('editFile', true, `Förhandsgranskad: ${relativePath}`, [relativePath]);
+      }
+
       await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(newText));
       this.stream.progress(`✏️ Redigerade ${relativePath}`);
       return this.record('editFile', true, `Redigerade ${relativePath}`, [relativePath]);
@@ -221,6 +256,7 @@ export class AutonomousExecutor {
 
   /**
    * Ta bort en fil.
+   * Om DiffPreview är aktivt samlas ändringen för förhandsgranskning.
    */
   async deleteFile(relativePath: string): Promise<ActionResult> {
     const ws = vscode.workspace.workspaceFolders?.[0];
@@ -230,6 +266,24 @@ export class AutonomousExecutor {
 
     try {
       const uri = this.validatePath(relativePath, ws);
+
+      if (this.diffPreview) {
+        // Läs originalinnehåll för diff-vy
+        let original: string | undefined;
+        try {
+          const content = await vscode.workspace.fs.readFile(uri);
+          original = new TextDecoder().decode(content);
+        } catch { /* filen kanske inte finns */ }
+
+        this.diffPreview.addDiff({
+          path: relativePath,
+          type: 'delete',
+          original,
+        });
+        this.stream.progress(`📋 Förhandsgranskad: ${relativePath} (borttagning)`);
+        return this.record('deleteFile', true, `Förhandsgranskad: ${relativePath}`, [relativePath]);
+      }
+
       await vscode.workspace.fs.delete(uri);
       this.stream.progress(`🗑️ Tog bort ${relativePath}`);
       return this.record('deleteFile', true, `Tog bort ${relativePath}`, [relativePath]);

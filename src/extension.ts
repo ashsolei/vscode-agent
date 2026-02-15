@@ -258,6 +258,11 @@ export function activate(context: vscode.ExtensionContext) {
     agent.setTools(tools);
   }
 
+  // Injicera DiffPreview i alla agenter (för förhandsgranskning av autonoma ändringar)
+  for (const agent of registry.list()) {
+    agent.setDiffPreview(diffPreview);
+  }
+
   // --- 3b. Skapa workflow-engine ---
   const workflowEngine = new WorkflowEngine(registry);
 
@@ -304,6 +309,24 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }
 
+    // Registrera custom workflows
+    if (config.workflows) {
+      workflowEngine.clearWorkflows();
+      for (const [name, wf] of Object.entries(config.workflows)) {
+        workflowEngine.registerWorkflow(name, {
+          name,
+          description: wf.description ?? `Custom workflow: ${name}`,
+          steps: wf.steps.map((s) => ({
+            name: s.agentId,
+            agentId: s.agentId,
+            prompt: s.prompt ?? `Kör ${s.agentId}-agenten.`,
+            pipeOutput: s.pipeOutput,
+          })),
+        });
+      }
+      outputChannel.appendLine(`[Config] Registrerade ${Object.keys(config.workflows).length} custom workflows`);
+    }
+
     outputChannel.appendLine(`[Config] .agentrc.json uppdaterad: ${JSON.stringify(Object.keys(config))}`);
   });
 
@@ -314,6 +337,22 @@ export function activate(context: vscode.ExtensionContext) {
   }
   if (initialConfig.defaultAgent) {
     registry.setDefault(initialConfig.defaultAgent);
+  }
+  // Ladda initiala custom workflows
+  if (initialConfig.workflows) {
+    for (const [name, wf] of Object.entries(initialConfig.workflows)) {
+      workflowEngine.registerWorkflow(name, {
+        name,
+        description: wf.description ?? `Custom workflow: ${name}`,
+        steps: wf.steps.map((s) => ({
+          name: s.agentId,
+          agentId: s.agentId,
+          prompt: s.prompt ?? `Kör ${s.agentId}-agenten.`,
+          pipeOutput: s.pipeOutput,
+        })),
+      });
+    }
+    outputChannel.appendLine(`[Config] Laddade ${Object.keys(initialConfig.workflows).length} initiala custom workflows`);
   }
 
   // --- 4. Chat Request Handler ---
@@ -342,6 +381,29 @@ export function activate(context: vscode.ExtensionContext) {
     if (request.command === 'workflow-fix') {
       const results = await workflowEngine.run(WorkflowEngine.fixAndVerify(), ctx);
       return { metadata: { command: 'workflow', steps: results.length } };
+    }
+    if (request.command === 'workflow-run') {
+      // Kör en namngiven custom workflow från .agentrc.json
+      const workflowName = request.prompt.trim();
+      const available = workflowEngine.listWorkflows();
+
+      if (!workflowName || workflowName === 'list') {
+        if (available.length === 0) {
+          stream.markdown('📋 Inga custom workflows registrerade.\n\nLägg till workflows i `.agentrc.json`.');
+        } else {
+          stream.markdown(`📋 **Tillgängliga custom workflows:**\n\n${available.map(n => `- \`${n}\``).join('\n')}\n\nAnvänd: \`/workflow-run <namn>\``);
+        }
+        return { metadata: { command: 'workflow-run', listed: true } };
+      }
+
+      const wf = workflowEngine.getWorkflow(workflowName);
+      if (!wf) {
+        stream.markdown(`❌ Workflow \`${workflowName}\` hittades inte.\n\nTillgängliga: ${available.join(', ') || '(inga)'}`);
+        return { metadata: { command: 'workflow-run', notFound: workflowName } };
+      }
+
+      const results = await workflowEngine.run(wf, ctx);
+      return { metadata: { command: 'workflow-run', workflow: workflowName, steps: results.length } };
     }
 
     // Collaboration-kommandon
@@ -476,6 +538,15 @@ export function activate(context: vscode.ExtensionContext) {
       // Skapa checkpoint innan autonomt körning
       try {
         await guardrails.createCheckpoint(agent.id, `Innan /${agent.id}: ${request.prompt.slice(0, 50)}`, []);
+        if (notificationsEnabled) {
+          notifications.notify(
+            agent.id,
+            agent.name,
+            'info',
+            `Checkpoint skapad innan /${agent.id}`,
+            { actions: [{ label: 'Visa Dashboard', command: 'vscode-agent.showDashboard' }] }
+          );
+        }
       } catch (checkpointError) {
         outputChannel.appendLine(`[GuardRails] Checkpoint creation skipped: ${checkpointError}`);
       }
@@ -532,7 +603,29 @@ export function activate(context: vscode.ExtensionContext) {
         },
       });
       const captureCtx: AgentContext = { ...ctx, stream: captureStream };
-      const result = await middleware.execute(agent, captureCtx);
+
+      // Wrap autonoma agenter med progress-notis
+      let result: import('./agents/base-agent').AgentResult;
+      if (agent.isAutonomous && notificationsEnabled) {
+        result = await notifications.withProgress(
+          agent.name,
+          async (progress) => {
+            progress.report({ message: 'Kör...' });
+            return middleware.execute(agent!, captureCtx);
+          }
+        );
+      } else {
+        result = await middleware.execute(agent, captureCtx);
+      }
+
+      // DiffPreview: om autonoma agenten samlade ändringar, visa förhandsgranskning
+      if (agent.isAutonomous && diffPreview.count > 0) {
+        const diffResult = await diffPreview.reviewAndApply(stream);
+        outputChannel.appendLine(
+          `[DiffPreview] ${diffResult.applied} applicerade, ${diffResult.rejected} avvisade`
+        );
+        diffPreview.clear();
+      }
 
       // Dashboard: logga slut
       dashboard.logEnd(dashId, true);
@@ -734,6 +827,23 @@ export function activate(context: vscode.ExtensionContext) {
 
   eventEngine.activate();
   context.subscriptions.push({ dispose: () => eventEngine.dispose() });
+
+  // --- 5d2. Prenumerera på event-triggers → NotificationCenter ---
+  eventEngine.onDidTrigger((e) => {
+    if (notificationsEnabled) {
+      notifications.notify(
+        e.agentId,
+        e.agentId,
+        'info',
+        `Event-regel "${e.ruleId}" triggade agenten (${e.event})`,
+        {
+          actions: [
+            { label: 'Visa Dashboard', command: 'vscode-agent.showDashboard' },
+          ],
+        }
+      );
+    }
+  });
 
   // --- 5e. Skapa marketplace ---
   const marketplace = new AgentMarketplace(

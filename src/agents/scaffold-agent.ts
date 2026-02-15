@@ -32,7 +32,7 @@ export class ScaffoldAgent extends BaseAgent {
   }
 
   async handle(ctx: AgentContext): Promise<AgentResult> {
-    const executor = new AutonomousExecutor(ctx.stream);
+    const executor = new AutonomousExecutor(ctx.stream, this.diffPreview);
 
     this.progress(ctx, '🏗️ Genererar projektstruktur...');
 

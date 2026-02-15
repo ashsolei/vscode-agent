@@ -5,6 +5,26 @@ All notable changes to the **VS Code Agent** extension will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-07-11
+
+### Added
+- **DiffPreview → AutonomousExecutor wiring** — all 15 autonomous agents and plugin-loaded agents now route file changes through `DiffPreview` when available; `createFile()`, `editFile()`, and `deleteFile()` collect diffs for interactive preview instead of writing directly; handler shows diff review UI after autonomous execution and logs applied/rejected counts
+- **Custom Workflows from `.agentrc.json`** — `WorkflowEngine` gains custom workflow CRUD (`registerWorkflow`, `getWorkflow`, `listWorkflows`, `removeWorkflow`, `clearWorkflows`); workflows defined in `.agentrc.json` `workflows` key are auto-registered at startup and on config changes; new `/workflow-run` slash command to list and execute named workflows
+- **NotificationCenter deep integration** — `EventDrivenEngine` gains `onDidTrigger` event emitter; event-triggered agent runs now route through `NotificationCenter`; guardrails checkpoint creation generates info notifications; autonomous agent execution wrapped in `withProgress()` for real-time progress toasts
+- **17 new unit tests** — DiffPreview↔Executor integration (11 tests), custom workflow CRUD (8 tests), EventDrivenEngine `onDidTrigger` (2 tests)
+
+### Changed
+- `AutonomousExecutor` constructor now accepts optional `DiffPreview` as second parameter
+- `BaseAgent` gains 5th injection slot: `_diffPreview` with `setDiffPreview()` and protected accessor
+- `EventDrivenEngine` properly disposes `_onDidTrigger` emitter
+- Handler wraps autonomous agent execution in `notifications.withProgress()` when notifications are enabled
+
+### Improved
+- Total tests: 757 across 40 test files (up from 740/40)
+- All autonomous agents now provide interactive file change review before applying
+- Event-driven agent triggers visible to users via notification center
+- Guardrails checkpoint events surfaced as user-visible notifications
+
 ## [0.5.0] - 2025-07-10
 
 ### Added
