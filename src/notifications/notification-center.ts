@@ -280,5 +280,6 @@ export class NotificationCenter implements vscode.Disposable {
   dispose(): void {
     this.badgeItem.dispose();
     this._onDidNotify.dispose();
+    this.history.length = 0;
   }
 }

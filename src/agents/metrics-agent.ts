@@ -124,7 +124,7 @@ export class MetricsAgent extends BaseAgent {
       ctx.stream.markdown(`| Underhållbarhet | **${m.maintainabilityIndex}/100** |\n\n`);
 
       // Fil-betyg
-      if (result.fileMetrics?.length > 0) {
+      if (result.fileMetrics && result.fileMetrics.length > 0) {
         ctx.stream.markdown('### Filer per betyg\n\n');
         ctx.stream.markdown('| Fil | Rader | Komplexitet | Betyg |\n|-----|-------|-------------|-------|\n');
         for (const fm of result.fileMetrics.slice(0, 15)) {
@@ -133,7 +133,7 @@ export class MetricsAgent extends BaseAgent {
       }
 
       // Hotspots
-      if (result.hotspots?.length > 0) {
+      if (result.hotspots && result.hotspots.length > 0) {
         ctx.stream.markdown('\n### 🔥 Hotspots\n');
         for (const h of result.hotspots) {
           ctx.stream.markdown(`- ${h}\n`);
@@ -141,7 +141,7 @@ export class MetricsAgent extends BaseAgent {
       }
 
       // Rekommendationer
-      if (result.recommendations?.length > 0) {
+      if (result.recommendations && result.recommendations.length > 0) {
         ctx.stream.markdown('\n### 💡 Rekommendationer\n');
         for (const r of result.recommendations) {
           ctx.stream.markdown(`- ${r}\n`);

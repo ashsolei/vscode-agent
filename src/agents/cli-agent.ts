@@ -92,7 +92,7 @@ export class CliAgent extends BaseAgent {
         ctx.stream.markdown(`\n### Användning\n\`\`\`bash\n${result.usage}\n\`\`\`\n`);
       }
 
-      if (result.setupCommands?.length > 0) {
+      if (result.setupCommands && result.setupCommands.length > 0) {
         ctx.stream.markdown('\n**Setup:**\n');
         for (const cmd of result.setupCommands) {
           ctx.stream.markdown(`\`\`\`bash\n${cmd}\n\`\`\`\n`);

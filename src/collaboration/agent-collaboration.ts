@@ -357,7 +357,9 @@ Ditt uppdrag:
           confidence: this.estimateConfidence(captured),
           duration: Date.now() - start,
         };
-      } catch {
+      } catch (err) {
+        // Log the error so failed agents don't disappear silently
+        ctx.stream.markdown(`⚠️ ${agent.name} misslyckades: ${err instanceof Error ? err.message : String(err)}\n`);
         return null;
       }
     });

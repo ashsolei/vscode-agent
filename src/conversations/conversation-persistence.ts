@@ -340,6 +340,38 @@ export class ConversationPersistence implements vscode.Disposable {
     return [...this.currentMessages];
   }
 
+  /**
+   * Bygg en kontext-sträng från senaste konversationshistoriken.
+   * Kan injiceras i agentens workspaceContext för att ge kontinuitet.
+   * @param maxMessages Max antal meddelanden att inkludera (senaste först)
+   * @param maxChars Max antal tecken i resultatet
+   */
+  buildConversationContext(maxMessages: number = 10, maxChars: number = 3000): string {
+    if (this.currentMessages.length === 0) {
+      return '';
+    }
+
+    const recent = this.currentMessages.slice(-maxMessages);
+    const lines: string[] = ['--- Konversationshistorik ---'];
+
+    let totalChars = lines[0].length;
+    for (const msg of recent) {
+      const prefix = msg.role === 'user' ? 'Användare' : `Agent${msg.agentId ? ` (${msg.agentId})` : ''}`;
+      // Trunkera individuella meddelanden som är för långa
+      const content = msg.content.length > 500 ? msg.content.slice(0, 497) + '...' : msg.content;
+      const line = `[${prefix}]: ${content}`;
+
+      if (totalChars + line.length + 1 > maxChars) {
+        break;
+      }
+      lines.push(line);
+      totalChars += line.length + 1;
+    }
+
+    lines.push('--- Slut konversationshistorik ---');
+    return lines.join('\n');
+  }
+
   /** Antal sparade */
   get count(): number {
     return this.conversations.size;

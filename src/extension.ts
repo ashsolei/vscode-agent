@@ -243,11 +243,78 @@ export function activate(context: vscode.ExtensionContext) {
     agent.setRegistry(registry);
   }
 
+  // Injicera minne i alla agenter (för remember/recall)
+  for (const agent of registry.list()) {
+    agent.setMemory(memory);
+  }
+
+  // Injicera modell-väljare i alla agenter (för per-agent modellval)
+  for (const agent of registry.list()) {
+    agent.setModelSelector(modelSelector);
+  }
+
+  // Injicera verktygsregistret i alla agenter (för fil/sök-verktyg)
+  for (const agent of registry.list()) {
+    agent.setTools(tools);
+  }
+
   // --- 3b. Skapa workflow-engine ---
   const workflowEngine = new WorkflowEngine(registry);
 
   // --- 3c. Skapa collaboration ---
   const collaboration = new AgentCollaboration(registry);
+
+  // --- 3d. Koppla .agentrc.json-inställningar till subsystem ---
+  configManager.onDidChange((config) => {
+    // Uppdatera default-agent
+    if (config.defaultAgent) {
+      registry.setDefault(config.defaultAgent);
+    }
+
+    // Uppdatera guardrails-inställningar
+    if (config.guardrails) {
+      if (config.guardrails.dryRunDefault !== undefined) {
+        // Flaggan används i handler-loopen ovan via guardrailsDryRun
+        // men vi kan inte mutera const — logga istället
+        outputChannel.appendLine(`[Config] guardrails.dryRunDefault = ${config.guardrails.dryRunDefault}`);
+      }
+    }
+
+    // Uppdatera minnesinställningar
+    if (config.memory) {
+      if (config.memory.maxAge || config.memory.maxCount) {
+        memory.prune({
+          maxAge: config.memory.maxAge,
+          maxCount: config.memory.maxCount,
+        });
+      }
+    }
+
+    // Registrera custom event-regler
+    if (config.eventRules) {
+      for (const rule of config.eventRules) {
+        eventEngine.addRule({
+          id: `config-${rule.agentId}-${rule.event}`,
+          event: rule.event as 'onSave' | 'onDiagnostics' | 'onFileCreate' | 'onFileDelete' | 'onInterval',
+          agentId: rule.agentId,
+          prompt: rule.prompt ?? '',
+          filePattern: rule.filePattern,
+          enabled: rule.enabled ?? true,
+        });
+      }
+    }
+
+    outputChannel.appendLine(`[Config] .agentrc.json uppdaterad: ${JSON.stringify(Object.keys(config))}`);
+  });
+
+  // Kolla disabledAgents vid start (initialt laddad config)
+  const initialConfig = configManager.current;
+  if (initialConfig.disabledAgents && initialConfig.disabledAgents.length > 0) {
+    outputChannel.appendLine(`[Config] Inaktiverade agenter: ${initialConfig.disabledAgents.join(', ')}`);
+  }
+  if (initialConfig.defaultAgent) {
+    registry.setDefault(initialConfig.defaultAgent);
+  }
 
   // --- 4. Chat Request Handler ---
   const handler: vscode.ChatRequestHandler = async (
@@ -293,6 +360,11 @@ export function activate(context: vscode.ExtensionContext) {
       const result = await collaboration.consensus(agentIds, ctx);
       return { metadata: { command: 'collab-consensus', agreement: result.agreementLevel } };
     }
+    if (request.command === 'collab-review') {
+      const agentIds = (request.prompt || 'code,review,security').split(',').map((s) => s.trim());
+      const result = await collaboration.reviewChain(agentIds, ctx);
+      return { metadata: { command: 'collab-review', steps: result.votes.length } };
+    }
 
     if (request.command) {
       // Slash-kommando: direkt routing
@@ -300,7 +372,48 @@ export function activate(context: vscode.ExtensionContext) {
     } else {
       // Inget slash-kommando: använd smart auto-router (LLM-baserad)
       stream.progress('🧠 Analyserar meddelande...');
-      agent = await registry.smartRoute(ctx);
+
+      // Samla routing-options: profil + telemetri
+      const activeProfile = profileManager.active;
+      const routeOptions: {
+        profileAgents?: string[];
+        telemetryStats?: Record<string, { successRate: number; avgDurationMs: number }>;
+      } = {};
+
+      if (activeProfile) {
+        routeOptions.profileAgents = activeProfile.agents;
+      }
+
+      if (telemetryEnabled) {
+        const stats = telemetry.agentStats();
+        const telemetryStats: Record<string, { successRate: number; avgDurationMs: number }> = {};
+        for (const [id, s] of Object.entries(stats)) {
+          if (s.calls >= 3) { // Bara agenter med tillräcklig data
+            telemetryStats[id] = {
+              successRate: Math.round((s.successCount / s.calls) * 100),
+              avgDurationMs: s.avgDurationMs,
+            };
+          }
+        }
+        if (Object.keys(telemetryStats).length > 0) {
+          routeOptions.telemetryStats = telemetryStats;
+        }
+      }
+
+      agent = await registry.smartRoute(ctx, routeOptions);
+    }
+
+    // Kontrollera om agenten är inaktiverad via .agentrc.json
+    if (agent && configManager.isDisabled(agent.id)) {
+      stream.markdown(`⚠️ Agent \`${agent.id}\` är inaktiverad i .agentrc.json (disabledAgents).`);
+      return { metadata: { command: request.command ?? 'default', disabled: true } };
+    }
+
+    // Injicera custom system-prompt från .agentrc.json om det finns
+    const customPrompt = configManager.getPrompt(agent?.id ?? '');
+    if (customPrompt && agent) {
+      // Lägg till som prefix i workspaceContext — agents läser det automatiskt
+      ctx.workspaceContext = `[Custom systeminstruktion]\n${customPrompt}\n\n${ctx.workspaceContext ?? ''}`;
     }
 
     if (!agent) {
@@ -315,7 +428,7 @@ export function activate(context: vscode.ExtensionContext) {
         '**👾 Autonoma:** `/component` `/i18n` `/plan` `/a11y` `/docgen` `/metrics` `/cli` `/fullstack`\n' +
         '**🧪 Testning:** `/testrunner`\n' +
         '**🧬 Meta:** `/create-agent`\n' +
-        '**🤝 Collaboration:** `/collab-vote` `/collab-debate` `/collab-consensus`');
+        '**🤝 Collaboration:** `/collab-vote` `/collab-debate` `/collab-consensus` `/collab-review`');
       return;
     }
 
@@ -363,8 +476,8 @@ export function activate(context: vscode.ExtensionContext) {
       // Skapa checkpoint innan autonomt körning
       try {
         await guardrails.createCheckpoint(agent.id, `Innan /${agent.id}: ${request.prompt.slice(0, 50)}`, []);
-      } catch {
-        // Ingen workspace — hoppa över checkpoint
+      } catch (checkpointError) {
+        outputChannel.appendLine(`[GuardRails] Checkpoint creation skipped: ${checkpointError}`);
       }
     }
 
@@ -386,7 +499,18 @@ export function activate(context: vscode.ExtensionContext) {
       // Injicera arbetsytekontext automatiskt (git diff, diagnostik, etc.)
       try {
         const workspaceContext = await contextProviders.buildPromptContext(2000);
-        ctx.workspaceContext = workspaceContext;
+        // Lägg till konversationshistorik om det finns
+        const conversationContext = conversationPersistence.buildConversationContext(8, 2000);
+        // Lägg till agentminne-kontext om det finns
+        const memoryContext = memory.buildContextWindow(agent.id, request.prompt, 500);
+        let combined = workspaceContext;
+        if (conversationContext) {
+          combined += `\n\n${conversationContext}`;
+        }
+        if (memoryContext) {
+          combined += `\n\n${memoryContext}`;
+        }
+        ctx.workspaceContext = combined;
       } catch {
         // Degrade gracefully if context gathering fails
         ctx.workspaceContext = '';
@@ -430,6 +554,18 @@ export function activate(context: vscode.ExtensionContext) {
         await responseCache.set(cacheKey, agentResponseText, { agentId: agent.id });
       }
 
+      // Memory: spara kontextsammanfattning för framtida anrop
+      if (agentResponseText) {
+        memory.remember(
+          agent.id,
+          agentResponseText.slice(0, 500),
+          {
+            type: 'context',
+            tags: [request.command ?? 'auto', agent.id],
+          }
+        );
+      }
+
       // Telemetri: logga framgång
       if (telemetryEnabled) {
         await telemetry.log({
@@ -443,20 +579,31 @@ export function activate(context: vscode.ExtensionContext) {
         });
       }
 
-      // Conversation: spara agent-svar
+      // Conversation: spara faktiskt agent-svar (max 10 000 tecken)
       await conversationPersistence.addMessage({
         role: 'assistant',
-        content: `[Agent: ${agent.id}] svarade på: ${request.prompt.slice(0, 100)}`,
+        content: agentResponseText
+          ? agentResponseText.slice(0, 10_000)
+          : `[Agent: ${agent.id}] svarade (inget fångat)`,
         agentId: agent.id,
         command: request.command,
         timestamp: Date.now(),
       });
 
+      // Notifiera om framgång
+      if (notificationsEnabled) {
+        notifications.notifyAgentDone(
+          agent.id,
+          agent.name,
+          true
+        );
+      }
+
       // Spara-snippet knapp
       stream.button({
         command: 'vscode-agent.saveSnippet',
         title: '📋 Spara som snippet',
-        arguments: [agent.id, request.prompt],
+        arguments: [agent.id, request.prompt, agentResponseText],
       });
 
       // Integrations-knapp
@@ -497,7 +644,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       // Notifiera om fel
       if (notificationsEnabled) {
-          notifications.notifyAgentDone(
+        notifications.notifyAgentDone(
           agent?.id ?? 'unknown',
           agent?.name ?? 'Unknown',
           false,
@@ -571,6 +718,20 @@ export function activate(context: vscode.ExtensionContext) {
 
   // --- 5d. Starta event-driven engine ---
   const eventEngine = new EventDrivenEngine(registry, context.globalState);
+
+  // Registrera fördefinierade regler (disabled by default — aktiveras via settings)
+  const eventConfig = vscode.workspace.getConfiguration('vscodeAgent.events');
+  const defaultRules = [
+    EventDrivenEngine.autoFixOnSave(),
+    EventDrivenEngine.securityOnNewFile(),
+    EventDrivenEngine.docsOnErrors(),
+  ];
+  for (const rule of defaultRules) {
+    // Aktivera bara om explicit aktiverad i settings
+    rule.enabled = eventConfig.get<boolean>(`${rule.id}.enabled`, false);
+    eventEngine.addRule(rule);
+  }
+
   eventEngine.activate();
   context.subscriptions.push({ dispose: () => eventEngine.dispose() });
 
@@ -578,11 +739,17 @@ export function activate(context: vscode.ExtensionContext) {
   const marketplace = new AgentMarketplace(
     context.globalState,
     (pluginData) => {
-      // On install: ladda plugin via pluginLoader
-      outputChannel.appendLine(`Marketplace: installerad: ${pluginData.id}`);
+      // On install: plugin-filen skrivs av marketplace till .agent-plugins/,
+      // FileSystemWatcher i pluginLoader registrerar agenten automatiskt.
+      outputChannel.appendLine(`Marketplace: installerad: ${pluginData?.id ?? 'unknown'}`);
+      treeProvider.refresh();
     },
     (agentId) => {
+      // On uninstall: marketplace tar bort filen, watcher hanterar avregistrering.
+      // Fallback: avregistrera direkt om watcher missar det.
       outputChannel.appendLine(`Marketplace: avinstallerad: ${agentId}`);
+      registry.unregister(agentId);
+      treeProvider.refresh();
     }
   );
   context.subscriptions.push(marketplace);
@@ -592,6 +759,9 @@ export function activate(context: vscode.ExtensionContext) {
     (agent) => {
       registry.register(agent);
       agent.setRegistry(registry);
+      agent.setMemory(memory);
+      agent.setModelSelector(modelSelector);
+      agent.setTools(tools);
       treeProvider.refresh();
       statusBar.updatePlugins(pluginLoader.listPlugins().length);
     },
@@ -664,7 +834,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('vscode-agent.toggleCodeLens', () => {
       codeLensProvider.setEnabled(
-        !codeLensProvider['enabled']
+        !codeLensProvider.isEnabled()
       );
       vscode.window.showInformationMessage('Agent: CodeLens togglad.');
     })
@@ -744,9 +914,13 @@ export function activate(context: vscode.ExtensionContext) {
 
   // --- Snippet-kommandon ---
   context.subscriptions.push(
-    vscode.commands.registerCommand('vscode-agent.saveSnippet', async (agentId?: string, prompt?: string) => {
-      const editor = vscode.window.activeTextEditor;
-      const content = editor?.document.getText(editor.selection.isEmpty ? undefined : editor.selection) ?? '';
+    vscode.commands.registerCommand('vscode-agent.saveSnippet', async (agentId?: string, prompt?: string, agentContent?: string) => {
+      // Använd agent-svaret om det skickades från knappen, annars editor-text
+      let content = agentContent ?? '';
+      if (!content) {
+        const editor = vscode.window.activeTextEditor;
+        content = editor?.document.getText(editor.selection.isEmpty ? undefined : editor.selection) ?? '';
+      }
       await snippetLibrary.quickSave(
         agentId ?? 'unknown',
         prompt ?? 'manuell',

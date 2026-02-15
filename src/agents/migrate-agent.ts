@@ -111,10 +111,10 @@ export class MigrateAgent extends BaseAgent {
       for (const file of files) {
         switch (file.action) {
           case 'create':
-            await executor.createFile(file.path, file.content);
+            await executor.createFile(file.path, file.content ?? '');
             break;
           case 'edit':
-            await executor.editFile(file.path, file.oldCode, file.newCode);
+            await executor.editFile(file.path, file.oldCode ?? '', file.newCode ?? '');
             break;
           case 'delete':
             await executor.deleteFile(file.path);
@@ -124,14 +124,14 @@ export class MigrateAgent extends BaseAgent {
 
       executor.reportSummary();
 
-      if (result.breakingChanges?.length > 0) {
+      if (result.breakingChanges && result.breakingChanges.length > 0) {
         ctx.stream.markdown('\n### ⚠️ Breaking Changes\n');
         for (const bc of result.breakingChanges) {
           ctx.stream.markdown(`- ${bc}\n`);
         }
       }
 
-      if (result.manualSteps?.length > 0) {
+      if (result.manualSteps && result.manualSteps.length > 0) {
         ctx.stream.markdown('\n### 📋 Manuella steg\n');
         for (const step of result.manualSteps) {
           ctx.stream.markdown(`- [ ] ${step}\n`);

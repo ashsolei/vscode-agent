@@ -3,7 +3,7 @@
     "chat.promptFiles": true,
     "chat.agent.enabled": true,
     "chat.experimental.useSkillAdherencePrompt": true,
-    "chat.mcp.enabled": true,
     "github.copilot.chat.agent.thinkingTool": true,
-    "github.copilot.chat.skills": true
+    "github.copilot.chat.skills": true,
+    "chat.mcp.access": "all"
 }

@@ -2,7 +2,7 @@
 
 En modulär, utbyggbar agent-struktur för VS Code Chat med **30+ specialiserade AI-agenter**, autonoma filändringar, cross-window-synkronisering, marketplace, telemetri och en komplett utvecklingsplattform.
 
-**85+ filer · 12 000+ rader TypeScript · 30+ agenter · 25 moduler · 37 slash-commands · 30 kommandon · 120+ enhetstester · CI/CD · Docker · i18n (EN/SV)**
+**85+ filer · 12 000+ rader TypeScript · 30+ agenter · 25 moduler · 37 slash-commands · 30 kommandon · 680 enhetstester · CI/CD · Docker · i18n (EN/SV)**
 
 ---
 
@@ -42,7 +42,7 @@ En modulär, utbyggbar agent-struktur för VS Code Chat med **30+ specialiserade
 | **Agent Marketplace** | Bläddra, installera, publicera och betygsätt community-agenter |
 | **Response Cache** | LRU-cache för LLM-svar med TTL, eviction och agent-invalidering |
 | **i18n (EN/SV)** | Fullständigt tvåspråkigt stöd med `t()` translate-funktion |
-| **120+ enhetstester** | Vitest med VS Code API-mock, 12+ testfiler, v8 coverage |
+| **680 enhetstester** | Vitest med VS Code API-mock, 32 testfiler, v8 coverage |
 | **CI/CD** | GitHub Actions: build → lint → test → VSIX → Docker |
 | **Docker** | Multi-stage Dockerfile för reproducerbar VSIX-paketning |
 | **Health Check** | Inbyggt diagnostikkommando för att verifiera systemstatus |

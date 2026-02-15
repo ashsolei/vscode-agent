@@ -15,6 +15,10 @@ export class AgentCodeLensProvider implements vscode.CodeLensProvider {
 
   private enabled = true;
 
+  isEnabled(): boolean {
+    return this.enabled;
+  }
+
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
     this._onDidChangeCodeLenses.fire();

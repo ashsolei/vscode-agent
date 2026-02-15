@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { streamResponse } from '../utils/streaming';
+import { extractTurnText } from '../utils/history';
 
 /**
  * Resultat från en agent-exekvering.
@@ -71,13 +73,7 @@ export abstract class BaseAgent {
     );
 
     for (const turn of previousTurns) {
-      let fullMessage = '';
-      for (const part of turn.response) {
-        const mdPart = part as vscode.ChatResponseMarkdownPart;
-        if (mdPart?.value?.value) {
-          fullMessage += mdPart.value.value;
-        }
-      }
+      const fullMessage = extractTurnText(turn);
       if (fullMessage) {
         messages.push(vscode.LanguageModelChatMessage.Assistant(fullMessage));
       }
@@ -89,21 +85,15 @@ export abstract class BaseAgent {
     );
 
     try {
-      const chatResponse = await ctx.request.model.sendRequest(
+      const model = await this.resolveModel(ctx);
+      const modelOptions = this.getModelOptions();
+      const chatResponse = await model.sendRequest(
         messages,
-        {},
+        modelOptions,
         ctx.token
       );
 
-      let fullResponse = '';
-      for await (const fragment of chatResponse.text) {
-        if (ctx.token.isCancellationRequested) {
-          break;
-        }
-        ctx.stream.markdown(fragment);
-        fullResponse += fragment;
-      }
-
+      const fullResponse = await streamResponse(chatResponse, ctx.stream, ctx.token);
       return fullResponse;
     } catch (error) {
       if (ctx.token.isCancellationRequested) {
@@ -125,9 +115,11 @@ export abstract class BaseAgent {
     ctx: AgentContext,
     messages: vscode.LanguageModelChatMessage[]
   ): Promise<string> {
-    const chatResponse = await ctx.request.model.sendRequest(
+    const model = await this.resolveModel(ctx);
+    const modelOptions = this.getModelOptions();
+    const chatResponse = await model.sendRequest(
       messages,
-      {},
+      modelOptions,
       ctx.token
     );
 
@@ -306,7 +298,93 @@ export abstract class BaseAgent {
   }
 
   // ─────────────────────────────────────────────────────
-  //  �🔗 Delegation helpers (kräver AgentRegistry injection)
+  //  🧠 Memory helpers (kräver AgentMemory injection)
+  // ─────────────────────────────────────────────────────
+
+  private _memory?: import('../memory').AgentMemory;
+
+  /** Injiceras av extension.ts efter registrering */
+  setMemory(mem: import('../memory').AgentMemory): void {
+    this._memory = mem;
+  }
+
+  /** Åtkomst till agentminne, undefined om ej injicerat */
+  protected get memory(): import('../memory').AgentMemory | undefined {
+    return this._memory;
+  }
+
+  // ─────────────────────────────────────────────────────
+  //  🤖 ModelSelector (kräver injection)
+  // ─────────────────────────────────────────────────────
+
+  private _modelSelector?: import('../models').ModelSelector;
+
+  /** Injiceras av extension.ts efter registrering */
+  setModelSelector(selector: import('../models').ModelSelector): void {
+    this._modelSelector = selector;
+  }
+
+  /** Åtkomst till modell-väljare, undefined om ej injicerat */
+  protected get modelSelector(): import('../models').ModelSelector | undefined {
+    return this._modelSelector;
+  }
+
+  /**
+   * Hämta rätt modell för denna agent. Använder ModelSelector om tillgängligt,
+   * annars fallback till request-modellen.
+   */
+  protected async resolveModel(
+    ctx: AgentContext
+  ): Promise<vscode.LanguageModelChat> {
+    if (this._modelSelector) {
+      return this._modelSelector.selectModel(this.id, ctx.request.model);
+    }
+    return ctx.request.model;
+  }
+
+  /**
+   * Hämta modell-options (temperatur, max tokens) för denna agent.
+   */
+  protected getModelOptions(): Record<string, unknown> {
+    if (this._modelSelector) {
+      return this._modelSelector.getModelOptions(this.id) as unknown as Record<string, unknown>;
+    }
+    return {};
+  }
+
+  // ─────────────────────────────────────────────────────
+  //  🔧 ToolRegistry (kräver injection)
+  // ─────────────────────────────────────────────────────
+
+  private _toolRegistry?: import('../tools').ToolRegistry;
+
+  /** Injiceras av extension.ts efter registrering */
+  setTools(toolReg: import('../tools').ToolRegistry): void {
+    this._toolRegistry = toolReg;
+  }
+
+  /** Åtkomst till verktygsregistret, undefined om ej injicerat */
+  protected get toolRegistry(): import('../tools').ToolRegistry | undefined {
+    return this._toolRegistry;
+  }
+
+  /**
+   * Kör ett verktyg efter ID (t.ex. 'file', 'search').
+   * Kräver att setTools() anropats.
+   */
+  protected async executeTool(
+    toolId: string,
+    params: Record<string, unknown>,
+    token: vscode.CancellationToken
+  ): Promise<import('../tools').ToolResult> {
+    if (!this._toolRegistry) {
+      return { success: false, error: 'ToolRegistry ej injicerat. Anropa setTools() först.' };
+    }
+    return this._toolRegistry.execute(toolId, params, token);
+  }
+
+  // ─────────────────────────────────────────────────────
+  //  🔗 Delegation helpers (kräver AgentRegistry injection)
   // ─────────────────────────────────────────────────────
 
   private _registry?: import('./index').AgentRegistry;

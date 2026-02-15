@@ -97,8 +97,11 @@ describe('TelemetryEngine', () => {
   });
 
   it('should persist data', async () => {
+    vi.useFakeTimers();
     await telemetry.log(makeEntry());
+    vi.advanceTimersByTime(5000);
     expect(memento.update).toHaveBeenCalled();
+    vi.useRealTimers();
   });
 
   it('should track failure stats', async () => {

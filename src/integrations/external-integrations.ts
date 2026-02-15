@@ -326,6 +326,7 @@ export class ExternalIntegrations implements vscode.Disposable {
   }
 
   dispose(): void {
-    // Inget att städa
+    // Rensa cachead konfiguration med credentials
+    this.config = {};
   }
 }

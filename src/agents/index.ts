@@ -55,10 +55,19 @@ export class AgentRegistry {
   /**
    * Hitta rätt agent baserat på slash-kommandot i requesten.
    * Om inget kommando anges, används standardagenten.
+   * Om profileAgents anges, prioriteras de agenterna.
    */
-  resolve(ctx: AgentContext): BaseAgent | undefined {
+  resolve(ctx: AgentContext, profileAgents?: string[]): BaseAgent | undefined {
     if (ctx.request.command) {
       return this.agents.get(ctx.request.command) ?? this.defaultAgent;
+    }
+    // Om profil är aktiv och standardagenten inte finns i profilen,
+    // välj första profil-agenten som existerar
+    if (profileAgents && profileAgents.length > 0) {
+      for (const id of profileAgents) {
+        const a = this.agents.get(id);
+        if (a) { return a; }
+      }
     }
     return this.defaultAgent;
   }
@@ -70,19 +79,7 @@ export class AgentRegistry {
     return this.agents.get(id);
   }
 
-  /**
-   * Avregistrera en agent (t.ex. vid plugin-avinstallation).
-   * Returnerar true om agenten fanns och togs bort.
-   */
-  unregister(agentId: string): boolean {
-    const agent = this.agents.get(agentId);
-    if (!agent) { return false; }
-    this.agents.delete(agentId);
-    if (this.defaultAgent === agent) {
-      this.defaultAgent = this.agents.values().next().value;
-    }
-    return true;
-  }
+
 
   /**
    * Lista alla registrerade agenter.
@@ -180,10 +177,35 @@ export class AgentRegistry {
   /**
    * Använd LLM för att automatiskt välja rätt agent baserat på
    * användarens meddelande (ingen slash-command behövs).
+   * Om profileAgents anges, begränsas valet till de agenterna.
+   * Om telemetryStats anges, inkluderas framgångsstatistik i routern.
    */
-  async smartRoute(ctx: AgentContext): Promise<BaseAgent | undefined> {
-    const agentDescriptions = this.list()
-      .map((a) => `- ${a.id}: ${a.description}`)
+  async smartRoute(
+    ctx: AgentContext,
+    options?: {
+      profileAgents?: string[];
+      telemetryStats?: Record<string, { successRate: number; avgDurationMs: number }>;
+    }
+  ): Promise<BaseAgent | undefined> {
+    // Filtrera agenter om profil är aktiv
+    const candidates = options?.profileAgents && options.profileAgents.length > 0
+      ? this.list().filter((a) => options.profileAgents!.includes(a.id))
+      : this.list();
+
+    if (candidates.length === 0) {
+      return this.defaultAgent;
+    }
+
+    const agentDescriptions = candidates
+      .map((a) => {
+        let line = `- ${a.id}: ${a.description}`;
+        // Inkludera telemetri om tillgänglig
+        if (options?.telemetryStats?.[a.id]) {
+          const s = options.telemetryStats[a.id];
+          line += ` (framgång: ${s.successRate}%, snitt: ${s.avgDurationMs}ms)`;
+        }
+        return line;
+      })
       .join('\n');
 
     const routerPrompt = `Du är en router. Analysera användarens meddelande och välj den bästa agenten.
@@ -191,8 +213,8 @@ export class AgentRegistry {
 Tillgängliga agenter:
 ${agentDescriptions}
 
-Svara med EXAKT ett agent-id (t.ex. "code", "refactor", "scaffold").
-Om ingen agent matchar, svara "code".
+${options?.telemetryStats ? 'Framgångsstatistik visas per agent — föredra agenter med hög framgångsgrad vid jämn matchning.\n' : ''}Svara med EXAKT ett agent-id (t.ex. "code", "refactor", "scaffold").
+Om ingen agent matchar, svara "${candidates[0]?.id ?? 'code'}".
 Svara ENBART med agent-id, inget annat.`;
 
     try {

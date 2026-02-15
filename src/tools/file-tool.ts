@@ -13,6 +13,11 @@ export class FileTool extends BaseTool {
    * Validate a relative path stays within the workspace root.
    */
   private validatePath(filePath: string, wsRoot: vscode.WorkspaceFolder): vscode.Uri {
+    // Defense-in-depth: reject paths containing '..' segments
+    const segments = filePath.split('/');
+    if (segments.some(s => s === '..')) {
+      throw new Error(`Sökvägen '${filePath}' pekar utanför arbetsytan`);
+    }
     const uri = vscode.Uri.joinPath(wsRoot.uri, filePath);
     const resolved = uri.fsPath;
     const root = wsRoot.uri.fsPath;
@@ -51,8 +56,8 @@ export class FileTool extends BaseTool {
       const content = await vscode.workspace.fs.readFile(uri);
       return this.success(new TextDecoder().decode(content));
     } catch (error) {
-      const msg = error instanceof Error ? error.message : `Kunde inte läsa fil: ${filePath}`;
-      return this.failure(msg);
+      const detail = error instanceof Error ? error.message : 'okänt fel';
+      return this.failure(`Kunde inte läsa fil: ${filePath} (${detail})`);
     }
   }
 

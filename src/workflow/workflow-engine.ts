@@ -84,6 +84,12 @@ export class WorkflowEngine {
 
     let i = 0;
     while (i < wf.steps.length) {
+      // Kontrollera om användaren avbrutit
+      if (ctx.token.isCancellationRequested) {
+        ctx.stream.markdown('\n⏹️ Workflow avbruten av användaren.\n');
+        break;
+      }
+
       // Samla steg i samma parallelGroup
       const step = wf.steps[i];
       if (step.parallelGroup) {
@@ -169,7 +175,9 @@ export class WorkflowEngine {
     // Variabelsubstitution i prompten
     let prompt = step.prompt;
     for (const [key, val] of Object.entries(variables)) {
-      prompt = prompt.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), val);
+      // Escape regex metacharacters in key to prevent injection
+      const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      prompt = prompt.replace(new RegExp(`\\$\\{${escapedKey}\\}`, 'g'), val);
     }
 
     // Pipe output från föregående steg

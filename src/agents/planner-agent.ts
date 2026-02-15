@@ -125,10 +125,10 @@ export class PlannerAgent extends BaseAgent {
         for (const file of (step.files ?? [])) {
           switch (file.action) {
             case 'create':
-              await executor.createFile(file.path, file.content);
+              await executor.createFile(file.path, file.content ?? '');
               break;
             case 'edit':
-              await executor.editFile(file.path, file.oldCode, file.newCode);
+              await executor.editFile(file.path, file.oldCode ?? '', file.newCode ?? '');
               break;
             case 'delete':
               await executor.deleteFile(file.path);
@@ -139,7 +139,7 @@ export class PlannerAgent extends BaseAgent {
 
       executor.reportSummary();
 
-      if (result.risks?.length > 0) {
+      if (result.risks && result.risks.length > 0) {
         ctx.stream.markdown('\n### ⚠️ Risker\n');
         for (const risk of result.risks) {
           ctx.stream.markdown(`- ${risk}\n`);

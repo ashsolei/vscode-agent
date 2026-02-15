@@ -6,13 +6,18 @@ import * as vscode from 'vscode';
 
 /**
  * Strömma ett komplett LanguageModel-svar till chatten.
+ * Stöder valfri cancellation token.
  */
 export async function streamResponse(
   chatResponse: vscode.LanguageModelChatResponse,
-  stream: vscode.ChatResponseStream
+  stream: vscode.ChatResponseStream,
+  token?: vscode.CancellationToken
 ): Promise<string> {
   let fullResponse = '';
   for await (const fragment of chatResponse.text) {
+    if (token?.isCancellationRequested) {
+      break;
+    }
     stream.markdown(fragment);
     fullResponse += fragment;
   }

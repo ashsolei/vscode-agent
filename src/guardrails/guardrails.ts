@@ -234,4 +234,12 @@ export class GuardRails {
   clearCheckpoints(): void {
     this.checkpoints = [];
   }
+
+  /**
+   * Dispose — rensa alla resurser.
+   */
+  dispose(): void {
+    this.checkpoints = [];
+    this.stream = undefined;
+  }
 }

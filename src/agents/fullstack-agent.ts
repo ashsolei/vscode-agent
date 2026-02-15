@@ -92,7 +92,7 @@ export class FullstackAgent extends BaseAgent {
 
       executor.reportSummary();
 
-      if (result.setupCommands?.length > 0) {
+      if (result.setupCommands && result.setupCommands.length > 0) {
         ctx.stream.markdown('\n**Setup:**\n');
         for (const cmd of result.setupCommands) {
           ctx.stream.markdown(`\`\`\`bash\n${cmd}\n\`\`\`\n`);

@@ -84,11 +84,17 @@ export const workspace = {
   }),
   openTextDocument: vi.fn().mockResolvedValue({ getText: vi.fn().mockReturnValue('') }),
   createFileSystemWatcher: vi.fn().mockReturnValue({
-    onDidChange: vi.fn(),
-    onDidCreate: vi.fn(),
-    onDidDelete: vi.fn(),
+    onDidChange: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+    onDidCreate: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+    onDidDelete: vi.fn().mockReturnValue({ dispose: vi.fn() }),
     dispose: vi.fn(),
   }),
+  onDidSaveTextDocument: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+  onDidOpenTextDocument: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+  onDidCloseTextDocument: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+  onDidChangeTextDocument: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+  findFiles: vi.fn().mockResolvedValue([]),
+  asRelativePath: vi.fn((uri: any) => typeof uri === 'string' ? uri : uri?.fsPath ?? ''),
   fs: {
     readFile: vi.fn().mockResolvedValue(Buffer.from('')),
     writeFile: vi.fn().mockResolvedValue(undefined),
@@ -107,6 +113,7 @@ export const commands = {
 export const languages = {
   registerCodeLensProvider: vi.fn().mockReturnValue({ dispose: vi.fn() }),
   getDiagnostics: vi.fn().mockReturnValue([]),
+  onDidChangeDiagnostics: vi.fn().mockReturnValue({ dispose: vi.fn() }),
 };
 
 export const extensions = {
@@ -207,6 +214,44 @@ export class RelativePattern {
     public readonly pattern: string,
   ) {}
 }
+
+export class ThemeColor {
+  constructor(public readonly id: string) {}
+}
+
+export class CodeLens {
+  constructor(public range: Range, public command?: any) {}
+}
+
+export enum TreeItemCollapsibleState {
+  None = 0,
+  Collapsed = 1,
+  Expanded = 2,
+}
+
+export class TreeItem {
+  label?: string;
+  id?: string;
+  description?: string;
+  tooltip?: any;
+  iconPath?: any;
+  command?: any;
+  contextValue?: string;
+  collapsibleState?: TreeItemCollapsibleState;
+
+  constructor(label: string, collapsibleState?: TreeItemCollapsibleState) {
+    this.label = label;
+    this.collapsibleState = collapsibleState;
+  }
+}
+
+export const ChatRequestTurn = class {
+  constructor(
+    public readonly prompt: string,
+    public readonly command?: string,
+    public readonly participant?: string
+  ) {}
+};
 
 export const lm = {
   selectChatModels: vi.fn().mockResolvedValue([]),

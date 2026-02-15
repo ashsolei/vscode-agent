@@ -74,7 +74,7 @@ export class ScaffoldAgent extends BaseAgent {
       // Rapportera
       executor.reportSummary();
 
-      if (project.postSetupCommands?.length > 0) {
+      if (project.postSetupCommands && project.postSetupCommands.length > 0) {
         ctx.stream.markdown('\n**Kör sedan:**\n');
         for (const cmd of project.postSetupCommands) {
           ctx.stream.markdown(`\`\`\`bash\n${cmd}\n\`\`\`\n`);

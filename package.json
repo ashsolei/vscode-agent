@@ -169,6 +169,10 @@
             "description": "🤝 Syntetisera bästa svaret från flera agenter"
           },
           {
+            "name": "collab-review",
+            "description": "🔗 Granskningskedja: varje agent förbättrar föregåendes svar"
+          },
+          {
             "name": "workflow-quality",
             "description": "🔄 Workflow: Kodgranskning + tester + säkerhet + prestanda"
           },

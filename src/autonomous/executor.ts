@@ -30,6 +30,11 @@ export class AutonomousExecutor {
    * Avvisar sökvägar med '..' som pekar utanför roten.
    */
   private validatePath(relativePath: string, ws: vscode.WorkspaceFolder): vscode.Uri {
+    // Defense-in-depth: reject paths containing '..' segments
+    const segments = relativePath.split('/');
+    if (segments.some(s => s === '..')) {
+      throw new Error(`Sökvägen '${relativePath}' pekar utanför arbetsytan`);
+    }
     const uri = vscode.Uri.joinPath(ws.uri, relativePath);
     const resolved = uri.fsPath;
     const root = ws.uri.fsPath;
