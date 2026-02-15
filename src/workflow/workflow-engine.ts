@@ -102,14 +102,16 @@ export class WorkflowEngine {
           )
         );
 
-        for (const pr of parallelResults) {
+        for (let j = 0; j < parallelResults.length; j++) {
+          const pr = parallelResults[j];
           if (pr.status === 'fulfilled') {
             results.push(pr.value);
           } else {
+            const failedStep = group[j];
             results.push({
-              stepName: 'unknown',
-              agentId: 'unknown',
-              text: '',
+              stepName: failedStep?.name ?? 'unknown',
+              agentId: failedStep?.agentId ?? 'unknown',
+              text: `FEL: ${pr.reason instanceof Error ? pr.reason.message : String(pr.reason)}`,
               success: false,
               skipped: false,
               durationMs: 0,
@@ -201,7 +203,7 @@ export class WorkflowEngine {
           retries: attempt,
         };
       } catch (err) {
-        lastError = String(err);
+        lastError = err instanceof Error ? err.message : String(err);
         if (attempt < maxRetries) {
           ctx.stream.markdown(`⚠️ Fel i ${step.name}, försöker igen...\n`);
         }

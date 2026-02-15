@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
  * En loggpost för agentaktivitet.
  */
 export interface ActivityEntry {
+  id: string;
   timestamp: number;
   agentId: string;
   agentName: string;
@@ -21,6 +22,7 @@ export class AgentDashboard {
   private activities: ActivityEntry[] = [];
   private usageStats: Record<string, number> = {};
   private disposables: vscode.Disposable[] = [];
+  private idCounter = 0;
 
   constructor(private extensionUri: vscode.Uri) {}
 
@@ -54,7 +56,9 @@ export class AgentDashboard {
    * Logga att en agent startar.
    */
   logStart(agentId: string, agentName: string, prompt: string): string {
+    const id = `${Date.now()}-${++this.idCounter}`;
     const entry: ActivityEntry = {
+      id,
       timestamp: Date.now(),
       agentId,
       agentName,
@@ -70,15 +74,15 @@ export class AgentDashboard {
     this.usageStats[agentId] = (this.usageStats[agentId] ?? 0) + 1;
     this.updateContent();
 
-    return entry.timestamp.toString();
+    return id;
   }
 
   /**
    * Logga att en agent är klar.
    */
-  logEnd(timestampId: string, success: boolean, error?: string): void {
+  logEnd(dashId: string, success: boolean, error?: string): void {
     const entry = this.activities.find(
-      (a) => a.timestamp.toString() === timestampId
+      (a) => a.id === dashId
     );
     if (entry) {
       entry.status = success ? 'success' : 'error';
@@ -146,6 +150,7 @@ export class AgentDashboard {
 <html lang="sv">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'none';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Agent Dashboard</title>
   <style>

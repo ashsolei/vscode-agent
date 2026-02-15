@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { BaseAgent, AgentContext, AgentResult } from '../agents/base-agent';
-import { AutonomousExecutor } from '../autonomous/executor';
+import { BaseAgent, AgentContext, AgentResult } from './base-agent';
+import { AutonomousExecutor } from '../autonomous';
 
 /**
  * CreateAgentAgent — en meta-agent som genererar helt nya agenter dynamiskt.
@@ -85,26 +85,34 @@ Svara ENBART med JSON-blocket, inget annat.`;
 
     let jsonResponse = '';
     try {
-      const response = await ctx.request.model.sendRequest(messages, {}, ctx.token);
-      for await (const fragment of response.text) {
-        jsonResponse += fragment;
-      }
+      jsonResponse = await this.chatRaw(ctx, messages);
     } catch {
       ctx.stream.markdown('❌ Kunde inte generera agent-definition.\n');
       return { metadata: { agent: 'create-agent', error: 'llm-failed' } };
     }
 
-    // Extrahera JSON
-    const jsonMatch = jsonResponse.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
+    if (this.isCancelled(ctx)) { return {}; }
+
+    // Extrahera JSON (robust)
+    const definition = this.extractJson<{
+      id?: string;
+      name?: string;
+      description?: string;
+      systemPrompt?: string;
+      icon?: string;
+      autonomous?: boolean;
+      tags?: string[];
+      delegates?: string[];
+      variables?: Record<string, unknown>;
+    }>(jsonResponse);
+
+    if (!definition) {
       ctx.stream.markdown('❌ LLM returnerade inte giltig JSON.\n');
       ctx.stream.markdown('```\n' + jsonResponse + '\n```\n');
       return { metadata: { agent: 'create-agent', error: 'parse-failed' } };
     }
 
     try {
-      const definition = JSON.parse(jsonMatch[0]);
-
       // Validera
       if (!definition.id || !definition.name || !definition.systemPrompt) {
         throw new Error('Saknar obligatoriska fält');
@@ -127,13 +135,15 @@ Svara ENBART med JSON-blocket, inget annat.`;
       ctx.stream.markdown('Plugin-systemet laddar om den automatiskt!\n\n');
       ctx.stream.markdown(`Använd den med: \`@agent /plugin-${definition.id}\`\n`);
 
+      executor.reportSummary();
+
       return {
         metadata: { agent: 'create-agent', mode: 'plugin', createdId: definition.id },
       };
     } catch (err) {
-      ctx.stream.markdown(`❌ Ogiltig JSON: ${err}\n`);
-      ctx.stream.markdown('```\n' + jsonMatch[0] + '\n```\n');
-      return { metadata: { agent: 'create-agent', error: 'invalid-json' } };
+      ctx.stream.markdown(`❌ Fel vid skapande av plugin: ${this.formatError(err)}\n`);
+      ctx.stream.markdown('```json\n' + JSON.stringify(definition, null, 2) + '\n```\n');
+      return { metadata: { agent: 'create-agent', error: 'invalid-definition' } };
     }
   }
 
@@ -181,6 +191,8 @@ Generera ENBART TypeScript-koden, inget annat. Inkludera alla imports.`;
 
     const response = await this.chat(ctx, genPrompt);
 
+    if (this.isCancelled(ctx)) { return {}; }
+
     // Extrahera kod
     const codeMatch = response.match(/```typescript\n([\s\S]*?)```/) ??
                       response.match(/```ts\n([\s\S]*?)```/);
@@ -197,16 +209,21 @@ Generera ENBART TypeScript-koden, inget annat. Inkludera alla imports.`;
       .replace(/-agent$/, '-agent');
 
     const filePath = `src/agents/${fileName}.ts`;
-    await executor.createFile(filePath, code);
 
-    ctx.stream.markdown(`\n\n✅ Agent sparad till \`${filePath}\`\n\n`);
-    ctx.stream.markdown('**Nästa steg:**\n');
-    ctx.stream.markdown('1. Importera i `extension.ts`: `import { ' + className + " } from './agents/" + fileName + "';`\n");
-    ctx.stream.markdown('2. Registrera: `registry.register(new ' + className + '());`\n');
-    ctx.stream.markdown('3. Lägg till slash-command i `package.json`\n');
-    ctx.stream.markdown('4. Kör `npm run compile`\n');
+    try {
+      await executor.createFile(filePath, code);
 
-    executor.reportSummary();
+      ctx.stream.markdown(`\n\n✅ Agent sparad till \`${filePath}\`\n\n`);
+      ctx.stream.markdown('**Nästa steg:**\n');
+      ctx.stream.markdown('1. Importera i `extension.ts`: `import { ' + className + " } from './agents/" + fileName + "';`\n");
+      ctx.stream.markdown('2. Registrera: `registry.register(new ' + className + '());`\n');
+      ctx.stream.markdown('3. Lägg till slash-command i `package.json`\n');
+      ctx.stream.markdown('4. Kör `npm run compile`\n');
+
+      executor.reportSummary();
+    } catch (err) {
+      ctx.stream.markdown(`❌ Fel vid skapande av agent-fil: ${this.formatError(err)}\n`);
+    }
 
     return {
       metadata: { agent: 'create-agent', mode: 'typescript', className, filePath },
@@ -265,19 +282,18 @@ Hjälp användaren med specifika uppgifter.\`;
 }`;
     ctx.stream.markdown('```typescript\n' + tsTemplate + '\n```\n\n');
 
-    // Skapa en exempelfil
-    const createExample = await vscode.window.showInformationMessage(
-      'Vill du skapa exempelmallarna som filer?',
-      'Ja',
-      'Nej'
-    );
+    // Skapa en exempelfil via knapp istället för blockande dialog
+    this.button(ctx, '📁 Skapa exempelmall', 'vscode-agent.createPlugin');
 
-    if (createExample === 'Ja') {
+    try {
       await executor.createFile(
         '.agent-plugins/my-agent.json',
         JSON.stringify(pluginTemplate, null, 2)
       );
       ctx.stream.markdown('✅ Skapade `.agent-plugins/my-agent.json`\n');
+      executor.reportSummary();
+    } catch (err) {
+      ctx.stream.markdown(`⚠️ Kunde inte skapa exempelfil: ${this.formatError(err)}\n`);
     }
 
     return { metadata: { agent: 'create-agent', mode: 'template' } };

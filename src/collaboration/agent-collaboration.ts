@@ -142,8 +142,8 @@ export class AgentCollaboration {
             confidence: this.estimateConfidence(captured),
             duration: Date.now() - roundStart,
           });
-        } catch {
-          // Agenten misslyckades denna omgång
+        } catch (err) {
+          ctx.stream.markdown(`⚠️ ${agent.name} misslyckades: ${err instanceof Error ? err.message : String(err)}\n`);
         }
       }
 
@@ -222,8 +222,8 @@ Skapa ett syntetiserat svar som:
         ctx.stream.markdown(fragment);
         synthesized += fragment;
       }
-    } catch {
-      synthesized = 'Kunde inte syntetisera svar.';
+    } catch (err) {
+      synthesized = `Kunde inte syntetisera svar: ${err instanceof Error ? err.message : String(err)}`;
       ctx.stream.markdown(synthesized);
     }
 
@@ -304,8 +304,8 @@ Ditt uppdrag:
           duration: Date.now() - roundStart,
         });
         previousResponse = captured;
-      } catch {
-        ctx.stream.markdown(`⚠️ ${agent.name} misslyckades.\n`);
+      } catch (err) {
+        ctx.stream.markdown(`⚠️ ${agent.name} misslyckades: ${err instanceof Error ? err.message : String(err)}\n`);
       }
     }
 

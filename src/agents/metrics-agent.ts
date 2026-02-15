@@ -83,18 +83,29 @@ export class MetricsAgent extends BaseAgent {
       ),
     ];
 
-    const response = await ctx.request.model.sendRequest(messages, {}, ctx.token);
-    let fullResponse = '';
-    for await (const fragment of response.text) { fullResponse += fragment; }
+    const fullResponse = await this.chatRaw(ctx, messages);
 
-    const jsonMatch = fullResponse.match(/```json\s*([\s\S]*?)```/);
-    if (!jsonMatch) {
+    if (this.isCancelled(ctx)) { return {}; }
+
+    const result = this.extractJson<{
+      metrics: {
+        totalFiles: number; totalLines: number; codeLines: number;
+        commentLines: number; blankLines: number; avgComplexity: number;
+        duplicateBlocks: number; techDebt: string; maintainabilityIndex: number;
+      };
+      fileMetrics?: Array<{ file: string; lines: number; complexity: number; issues: string[]; rating: string }>;
+      hotspots?: string[];
+      duplicates?: Array<{ files: string[]; lines: string; similarity: number }>;
+      recommendations?: string[];
+      summary?: string;
+    }>(fullResponse);
+
+    if (!result) {
       ctx.stream.markdown(fullResponse);
       return {};
     }
 
     try {
-      const result = JSON.parse(jsonMatch[1]);
       const m = result.metrics;
 
       // Rendera en snygg rapport
@@ -141,8 +152,10 @@ export class MetricsAgent extends BaseAgent {
       const reportContent = `# Kodkvalitetsrapport\n\n${result.summary}\n\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\``;
       await executor.createFile('.quality-report.md', reportContent);
 
+      executor.reportSummary();
+
     } catch (err) {
-      ctx.stream.markdown(`❌ Fel: ${err}`);
+      ctx.stream.markdown(`❌ Fel: ${this.formatError(err)}`);
     }
 
     return {

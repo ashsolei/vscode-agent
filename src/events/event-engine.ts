@@ -203,13 +203,26 @@ export class EventDrivenEngine {
 
     this.log(`🔔 Triggade regel "${rule.id}" → ${agent.name}: ${prompt.slice(0, 80)}`);
 
-    // Visa notifiering
+    // Öppna chatten med agenten och prompt
+    vscode.commands.executeCommand('workbench.action.chat.open', {
+      query: `@agent /${rule.agentId} ${prompt}`,
+    }).then(undefined, () => {
+      // Fallback: visa notifiering om chatten inte kan öppnas
+      this.log(`⚠️ Kunde inte öppna chatten för regel "${rule.id}"`);
+    });
+
+    // Visa notifiering med alternativ
     vscode.window.showInformationMessage(
-      `🤖 Agent "${agent.name}" triggad: ${rule.event}`,
-      'Visa logg'
+      `🤖 Agent "${agent.name}" triggad av ${rule.event}`,
+      'Visa logg',
+      'Öppna chatt'
     ).then((choice) => {
       if (choice === 'Visa logg') {
         this.outputChannel.show();
+      } else if (choice === 'Öppna chatt') {
+        vscode.commands.executeCommand('workbench.action.chat.open', {
+          query: `@agent /${rule.agentId} ${prompt}`,
+        });
       }
     });
   }

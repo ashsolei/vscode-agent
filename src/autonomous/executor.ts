@@ -169,11 +169,13 @@ export class AutonomousExecutor {
 
   /**
    * Applicera en textredigering på en befintlig fil.
+   * @param replaceAll Om true, ersätts alla förekomster av searchText (default: false).
    */
   async editFile(
     relativePath: string,
     searchText: string,
-    replaceText: string
+    replaceText: string,
+    replaceAll = false
   ): Promise<ActionResult> {
     const ws = vscode.workspace.workspaceFolders?.[0];
     if (!ws) {
@@ -189,7 +191,9 @@ export class AutonomousExecutor {
         return this.record('editFile', false, `Hittade inte texten i ${relativePath}`);
       }
 
-      const newText = text.replace(searchText, replaceText);
+      const newText = replaceAll
+        ? text.replaceAll(searchText, replaceText)
+        : text.replace(searchText, replaceText);
       await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(newText));
       this.stream.progress(`✏️ Redigerade ${relativePath}`);
       return this.record('editFile', true, `Redigerade ${relativePath}`, [relativePath]);
@@ -387,5 +391,26 @@ export class AutonomousExecutor {
     const result = { action, success, detail, filesAffected };
     this.actionLog.push(result);
     return result;
+  }
+
+  /**
+   * Läs och parsa en JSON-fil.
+   * Returnerar null om filen inte finns eller inte kan parsas.
+   */
+  async readJsonFile<T = unknown>(relativePath: string): Promise<T | null> {
+    const content = await this.readFile(relativePath);
+    if (!content) { return null; }
+    try {
+      return JSON.parse(content) as T;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Rensa åtgärdsloggen (t.ex. mellan iterationer).
+   */
+  clearLog(): void {
+    this.actionLog.length = 0;
   }
 }

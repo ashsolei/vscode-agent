@@ -335,6 +335,26 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     // GuardRails: skapa checkpoint för autonoma agenter
+    // Bekräftelse innan autonoma agenter körs
+    const confirmBeforeApply = vscode.workspace.getConfiguration('vscodeAgent.autonomous').get<boolean>('confirmBeforeApply', true);
+    if (agent.isAutonomous && confirmBeforeApply) {
+      const choice = await vscode.window.showWarningMessage(
+        `Agent "${agent.name}" kommer att göra ändringar i arbetsytan. Fortsätta?`,
+        { modal: false },
+        'Kör',
+        'Dry-run'
+      );
+      if (!choice) {
+        stream.markdown('⚠️ Avbruten av användaren.');
+        return { metadata: { command: request.command ?? 'default', cancelled: true } };
+      }
+      if (choice === 'Dry-run') {
+        guardrails.dryRun([{ action: 'run', target: agent.id, detail: request.prompt }]);
+        stream.markdown('👁️ **Dry-run:** Inga ändringar gjordes. Se output-panelen för detaljer.');
+        return { metadata: { command: request.command ?? 'default', dryRun: true } };
+      }
+    }
+
     if (guardrailsEnabled && agent.isAutonomous) {
       if (guardrailsDryRun) {
         guardrails.dryRun([{ action: 'run', target: agent.id, detail: request.prompt }]);
@@ -487,8 +507,10 @@ export function activate(context: vscode.ExtensionContext) {
 
       if (error instanceof vscode.LanguageModelError) {
         stream.markdown(`⚠️ Språkmodellfel: ${error.message}`);
+      } else if (error instanceof Error) {
+        stream.markdown(`❌ Ett oväntat fel inträffade: ${error.message}`);
       } else {
-        stream.markdown(`❌ Ett oväntat fel inträffade: ${error}`);
+        stream.markdown(`❌ Ett oväntat fel inträffade: ${String(error)}`);
       }
       return { metadata: { command: 'error' } };
     }
@@ -575,6 +597,7 @@ export function activate(context: vscode.ExtensionContext) {
     },
     (agentId) => {
       registry.unregister(agentId);
+      treeProvider.refresh();
       outputChannel.appendLine(`Plugin avregistrerad: ${agentId}`);
       statusBar.updatePlugins(pluginLoader.listPlugins().length);
     }

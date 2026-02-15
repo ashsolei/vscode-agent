@@ -79,22 +79,24 @@ export class AutoFixAgent extends BaseAgent {
       ),
     ];
 
-    const response = await ctx.request.model.sendRequest(messages, {}, ctx.token);
-    let fullResponse = '';
-    for await (const fragment of response.text) {
-      fullResponse += fragment;
-    }
+    const fullResponse = await this.chatRaw(ctx, messages);
 
-    // Extrahera och applicera fixar
-    const jsonMatch = fullResponse.match(/```json\s*([\s\S]*?)```/);
-    if (!jsonMatch) {
+    if (this.isCancelled(ctx)) { return {}; }
+
+    // Extrahera och applicera fixar (robust parsning)
+    const result = this.extractJson<{
+      fixes?: Array<{ file: string; description: string; oldCode: string; newCode: string }>;
+      newFiles?: Array<{ path: string; content: string }>;
+      summary?: string;
+    }>(fullResponse);
+
+    if (!result) {
       ctx.stream.markdown('⚠️ Kunde inte generera fixar automatiskt. Visar analys istället:\n\n');
       ctx.stream.markdown(fullResponse);
       return {};
     }
 
     try {
-      const result = JSON.parse(jsonMatch[1]);
 
       this.progress(ctx, `🔧 Applicerar ${result.fixes?.length ?? 0} fixar...`);
 
@@ -120,7 +122,7 @@ export class AutoFixAgent extends BaseAgent {
       }
 
     } catch (err) {
-      ctx.stream.markdown(`❌ Fel vid parsning av fixar: ${err}`);
+      ctx.stream.markdown(`❌ Fel vid parsning av fixar: ${this.formatError(err)}`);
     }
 
     return {

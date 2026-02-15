@@ -79,19 +79,21 @@ export class DevOpsAgent extends BaseAgent {
       ),
     ];
 
-    const response = await ctx.request.model.sendRequest(messages, {}, ctx.token);
-    let fullResponse = '';
-    for await (const fragment of response.text) { fullResponse += fragment; }
+    const fullResponse = await this.chatRaw(ctx, messages);
 
-    const jsonMatch = fullResponse.match(/```json\s*([\s\S]*?)```/);
-    if (!jsonMatch) {
+    if (this.isCancelled(ctx)) { return {}; }
+
+    const result = this.extractJson<{
+      files: Array<{ path: string; content: string }>;
+      summary?: string;
+    }>(fullResponse);
+
+    if (!result) {
       ctx.stream.markdown(fullResponse);
       return {};
     }
 
     try {
-      const result = JSON.parse(jsonMatch[1]);
-
       this.progress(ctx, `📦 Skapar ${result.files.length} konfigurationsfiler...`);
 
       for (const file of result.files) {
@@ -101,7 +103,7 @@ export class DevOpsAgent extends BaseAgent {
       executor.reportSummary();
       if (result.summary) { ctx.stream.markdown(`\n${result.summary}\n`); }
     } catch (err) {
-      ctx.stream.markdown(`❌ Fel: ${err}`);
+      ctx.stream.markdown(`❌ Fel: ${this.formatError(err)}`);
     }
 
     return {

@@ -57,7 +57,7 @@ export class SearchTool extends BaseTool {
         results: results.slice(0, 20), // Begränsa resultaten
       });
     } catch (error) {
-      return this.failure(`Sökning misslyckades: ${error}`);
+      return this.failure(`Sökning misslyckades: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

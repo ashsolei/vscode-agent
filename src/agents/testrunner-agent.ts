@@ -1,5 +1,5 @@
-import { BaseAgent, AgentContext, AgentResult } from '../agents/base-agent';
-import { AutonomousExecutor } from '../autonomous/executor';
+import { BaseAgent, AgentContext, AgentResult } from './base-agent';
+import { AutonomousExecutor } from '../autonomous';
 
 /**
  * Resultat från en testkörning.
@@ -93,37 +93,48 @@ Om användaren vill ha self-correcting, föreslå /testrunner selfcorrect.`);
       return { metadata: { agent: 'testrunner', error: 'no-framework' } };
     }
 
+    if (this.isCancelled(ctx)) { return {}; }
+
     ctx.stream.markdown(`### 🧪 Kör tester med **${framework.name}**\n\n`);
 
     this.progress(ctx, `Kör: ${framework.command}...`);
 
-    // Skriv output till en temporär fil som vi kan läsa
-    const outFile = '.agent-test-output.txt';
-    const cmdWithCapture = `${framework.command} > ${outFile} 2>&1 ; echo "EXIT:$?" >> ${outFile}`;
-    await executor.runCommand(cmdWithCapture, { timeout: 120000 });
+    try {
+      // Skriv output till en temporär fil som vi kan läsa
+      const outFile = '.agent-test-output.txt';
+      const cmdWithCapture = `${framework.command} > ${outFile} 2>&1 ; echo "EXIT:$?" >> ${outFile}`;
+      await executor.runCommand(cmdWithCapture, { timeout: 120000 });
 
-    const rawOutput = await executor.readFile(outFile);
+      if (this.isCancelled(ctx)) { return {}; }
 
-    if (rawOutput) {
-      const parsed = this.parseTestOutput(rawOutput, framework.name);
+      const rawOutput = await executor.readFile(outFile);
+      // Rensa tempfil
+      await executor.deleteFile(outFile);
 
-      ctx.stream.markdown(this.formatTestReport(parsed));
+      if (rawOutput) {
+        const parsed = this.parseTestOutput(rawOutput, framework.name);
 
-      if (parsed.failedTests.length > 0) {
-        ctx.stream.markdown('\n### 💡 Förslag\n');
-        ctx.stream.markdown('Använd `/testrunner selfcorrect` för att automatiskt fixa felande tester.\n');
+        ctx.stream.markdown(this.formatTestReport(parsed));
+
+        if (parsed.failedTests.length > 0) {
+          ctx.stream.markdown('\n### 💡 Förslag\n');
+          ctx.stream.markdown('Använd `/testrunner selfcorrect` för att automatiskt fixa felande tester.\n');
+        }
+
+        return {
+          metadata: { agent: 'testrunner', testFramework: framework.name, passed: parsed.passed, failed: parsed.failed },
+          followUps: parsed.failed > 0
+            ? [{ prompt: '/testrunner selfcorrect', label: '🔄 Self-correct', command: 'testrunner' }]
+            : [],
+        };
       }
 
-      return {
-        metadata: { agent: 'testrunner', testFramework: framework.name, passed: parsed.passed, failed: parsed.failed },
-        followUps: parsed.failed > 0
-          ? [{ prompt: '/testrunner selfcorrect', label: '🔄 Self-correct', command: 'testrunner' }]
-          : [],
-      };
+      ctx.stream.markdown('⚠️ Testerna kunde inte köras. Kontrollera terminalen.\n');
+      return { metadata: { agent: 'testrunner', error: 'run-failed' } };
+    } catch (err) {
+      ctx.stream.markdown(`❌ Fel vid testkörning: ${this.formatError(err)}\n`);
+      return { metadata: { agent: 'testrunner', error: 'run-exception' } };
     }
-
-    ctx.stream.markdown('⚠️ Testerna kunde inte köras. Kontrollera terminalen.\n');
-    return { metadata: { agent: 'testrunner', error: 'run-failed' } };
   }
 
   /**
@@ -153,45 +164,52 @@ Om användaren vill ha self-correcting, föreslå /testrunner selfcorrect.`);
     let allPassing = false;
     const fixHistory: string[] = [];
 
-    while (iteration < this.maxRetries && !allPassing) {
-      iteration++;
-      ctx.stream.markdown(`\n### Iteration ${iteration}/${this.maxRetries}\n\n`);
+    try {
+      while (iteration < this.maxRetries && !allPassing) {
+        if (this.isCancelled(ctx)) { break; }
 
-      // 1. Kör tester
-      this.progress(ctx, `🧪 Kör tester (iteration ${iteration})...`);
-      const outFile = '.agent-test-output.txt';
-      const cmdWithCapture = `${framework.command} > ${outFile} 2>&1 ; echo "EXIT:$?" >> ${outFile}`;
-      await executor.runCommand(cmdWithCapture, { timeout: 120000 });
+        iteration++;
+        ctx.stream.markdown(`\n### Iteration ${iteration}/${this.maxRetries}\n\n`);
 
-      const rawOutput = await executor.readFile(outFile);
+        // 1. Kör tester
+        this.progress(ctx, `🧪 Kör tester (iteration ${iteration})...`);
+        const outFile = '.agent-test-output.txt';
+        const cmdWithCapture = `${framework.command} > ${outFile} 2>&1 ; echo "EXIT:$?" >> ${outFile}`;
+        await executor.runCommand(cmdWithCapture, { timeout: 120000 });
 
-      if (!rawOutput) {
-        ctx.stream.markdown('❌ Misslyckades köra tester.\n');
-        break;
-      }
+        if (this.isCancelled(ctx)) { break; }
 
-      const output = rawOutput;
-      const parsed = this.parseTestOutput(output, framework.name);
+        const rawOutput = await executor.readFile(outFile);
+        // Rensa tempfil
+        await executor.deleteFile(outFile);
 
-      ctx.stream.markdown(
-        `**Resultat:** ${parsed.passed}/${parsed.totalTests} passerade`
-        + (parsed.failed > 0 ? `, ${parsed.failed} misslyckade` : '')
-        + '\n\n'
-      );
+        if (!rawOutput) {
+          ctx.stream.markdown('❌ Misslyckades köra tester.\n');
+          break;
+        }
 
-      if (parsed.failed === 0) {
-        allPassing = true;
-        break;
-      }
+        const output = rawOutput;
+        const parsed = this.parseTestOutput(output, framework.name);
 
-      // 2. Analysera fel med LLM
-      this.progress(ctx, '🧠 Analyserar fel...');
+        ctx.stream.markdown(
+          `**Resultat:** ${parsed.passed}/${parsed.totalTests} passerade`
+          + (parsed.failed > 0 ? `, ${parsed.failed} misslyckade` : '')
+          + '\n\n'
+        );
 
-      const failedInfo = parsed.failedTests
-        .map((t) => `Testnamn: ${t.name}\nFil: ${t.file ?? 'okänd'}\nFel: ${t.error}\n`)
-        .join('\n---\n');
+        if (parsed.failed === 0) {
+          allPassing = true;
+          break;
+        }
 
-      const analysisPrompt = `Du är en testfixningsexpert. Analysera dessa testfel och ge EXAKTA kodfixar.
+        // 2. Analysera fel med LLM
+        this.progress(ctx, '🧠 Analyserar fel...');
+
+        const failedInfo = parsed.failedTests
+          .map((t) => `Testnamn: ${t.name}\nFil: ${t.file ?? 'okänd'}\nFel: ${t.error}\n`)
+          .join('\n---\n');
+
+        const analysisPrompt = `Du är en testfixningsexpert. Analysera dessa testfel och ge EXAKTA kodfixar.
 
 Misslyckade tester:
 ${failedInfo}
@@ -216,35 +234,42 @@ REASON: <kort förklaring>
 
 Var precis — ge exakta strängar att söka och ersätta.`;
 
-      const fixResponse = await this.chat(ctx, analysisPrompt);
-      fixHistory.push(`Iteration ${iteration}: ${fixResponse.substring(0, 200)}`);
+        const fixResponse = await this.chat(ctx, analysisPrompt);
+        fixHistory.push(`Iteration ${iteration}: ${fixResponse.substring(0, 200)}`);
 
-      // 3. Försök parsa och applicera fixar
-      const fixes = this.parseFixes(fixResponse);
+        if (this.isCancelled(ctx)) { break; }
 
-      if (fixes.length === 0) {
-        ctx.stream.markdown('⚠️ Kunde inte generera fixar. Avbryter.\n');
-        break;
-      }
+        // 3. Försök parsa och applicera fixar
+        const fixes = this.parseFixes(fixResponse);
 
-      ctx.stream.markdown(`\n**Applicerar ${fixes.length} fixar...**\n`);
+        if (fixes.length === 0) {
+          ctx.stream.markdown('⚠️ Kunde inte generera fixar. Avbryter.\n');
+          break;
+        }
 
-      for (const fix of fixes) {
-        const content = await executor.readFile(fix.file);
-        if (content && content.includes(fix.oldCode)) {
-          const newContent = content.replace(fix.oldCode, fix.newCode);
-          await executor.createFile(fix.file, newContent);
-          ctx.stream.markdown(`✅ Fixade: \`${fix.file}\` — ${fix.reason}\n`);
-        } else {
-          ctx.stream.markdown(`⚠️ Kunde inte hitta matchande kod i \`${fix.file}\`\n`);
+        ctx.stream.markdown(`\n**Applicerar ${fixes.length} fixar...**\n`);
+
+        for (const fix of fixes) {
+          const content = await executor.readFile(fix.file);
+          if (content && content.includes(fix.oldCode)) {
+            const newContent = content.replace(fix.oldCode, fix.newCode);
+            await executor.createFile(fix.file, newContent);
+            ctx.stream.markdown(`✅ Fixade: \`${fix.file}\` — ${fix.reason}\n`);
+          } else {
+            ctx.stream.markdown(`⚠️ Kunde inte hitta matchande kod i \`${fix.file}\`\n`);
+          }
         }
       }
+    } catch (err) {
+      ctx.stream.markdown(`\n❌ Fel i self-correct loop: ${this.formatError(err)}\n`);
     }
 
     // Slutrapport
     ctx.stream.markdown('\n---\n');
     if (allPassing) {
       ctx.stream.markdown(`## ✅ Alla tester passerar efter ${iteration} iteration(er)!\n`);
+    } else if (this.isCancelled(ctx)) {
+      ctx.stream.markdown(`## ⛔ Avbruten av användaren efter ${iteration} iterationer.\n`);
     } else {
       ctx.stream.markdown(`## ⚠️ Avbröt efter ${iteration} iterationer. Manuell fix kan behövas.\n`);
     }

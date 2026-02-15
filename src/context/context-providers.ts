@@ -51,14 +51,15 @@ export class ContextProviderRegistry implements vscode.Disposable {
 
     const chunks: ContextChunk[] = [];
 
-    for (const [_id, provider] of this.providers) {
-      try {
-        const chunk = await provider();
-        if (chunk && chunk.content.trim()) {
-          chunks.push(chunk);
-        }
-      } catch {
-        // Ignorera misslyckade providers
+    // Kör alla providers parallellt
+    const providerEntries = [...this.providers.entries()];
+    const results = await Promise.allSettled(
+      providerEntries.map(([_id, provider]) => provider())
+    );
+
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value && result.value.content.trim()) {
+        chunks.push(result.value);
       }
     }
 

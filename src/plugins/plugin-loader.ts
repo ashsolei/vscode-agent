@@ -194,7 +194,7 @@ export class PluginLoader implements vscode.Disposable {
       return agent;
     } catch (err) {
       vscode.window.showWarningMessage(
-        `Kunde inte ladda plugin ${uri.fsPath}: ${err}`
+        `Kunde inte ladda plugin ${uri.fsPath}: ${err instanceof Error ? err.message : String(err)}`
       );
       return null;
     }

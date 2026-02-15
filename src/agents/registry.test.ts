@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { AgentRegistry } from '../agents/index';
-import { BaseAgent, AgentContext, AgentResult } from '../agents/base-agent';
+import { AgentRegistry } from './index';
+import { BaseAgent, AgentContext, AgentResult } from './base-agent';
 
 // Minimal concrete agent for testing
 class TestAgent extends BaseAgent {

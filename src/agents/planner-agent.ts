@@ -85,18 +85,30 @@ export class PlannerAgent extends BaseAgent {
       ),
     ];
 
-    const response = await ctx.request.model.sendRequest(messages, {}, ctx.token);
-    let fullResponse = '';
-    for await (const fragment of response.text) { fullResponse += fragment; }
+    const fullResponse = await this.chatRaw(ctx, messages);
 
-    const jsonMatch = fullResponse.match(/```json\s*([\s\S]*?)```/);
-    if (!jsonMatch) {
+    if (this.isCancelled(ctx)) { return {}; }
+
+    const result = this.extractJson<{
+      plan: {
+        title: string;
+        steps: Array<{
+          id: number; title: string; description: string;
+          files?: Array<{ action: string; path: string; content?: string; oldCode?: string; newCode?: string }>;
+          dependsOn?: number[];
+        }>;
+      };
+      estimatedComplexity?: string;
+      risks?: string[];
+      summary?: string;
+    }>(fullResponse);
+
+    if (!result) {
       ctx.stream.markdown(fullResponse);
       return {};
     }
 
     try {
-      const result = JSON.parse(jsonMatch[1]);
       const plan = result.plan;
 
       // Spara planen i delat tillstånd
@@ -134,7 +146,7 @@ export class PlannerAgent extends BaseAgent {
         }
       }
     } catch (err) {
-      ctx.stream.markdown(`❌ Fel: ${err}`);
+      ctx.stream.markdown(`❌ Fel: ${this.formatError(err)}`);
     }
 
     return {

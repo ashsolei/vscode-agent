@@ -357,9 +357,9 @@ export class ConversationPersistence implements vscode.Disposable {
   }
 
   dispose(): void {
-    // Spara sista state
+    // Spara sista state — best-effort, awaiting not possible in dispose
     if (this.currentMessages.length > 0 && this.currentId) {
-      this.save();
+      void this.save();
     }
   }
 }

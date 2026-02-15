@@ -26,6 +26,8 @@ export interface Memory {
 export class AgentMemory {
   private static readonly STORAGE_KEY = 'agentMemories';
   private memories: Memory[] = [];
+  private persistTimer: ReturnType<typeof setTimeout> | undefined;
+  private dirty = false;
 
   constructor(private globalState: vscode.Memento) {
     this.load();
@@ -98,7 +100,7 @@ export class AgentMemory {
       m.accessCount++;
       m.lastAccessedAt = Date.now();
     }
-    this.persist();
+    this.debouncedPersist();
     return mems;
   }
 
@@ -256,6 +258,19 @@ export class AgentMemory {
     if (stored) {
       this.memories = stored;
     }
+  }
+
+  /** Debounced persist — skriver max var 5:e sekund för access-count uppdateringar */
+  private debouncedPersist(): void {
+    this.dirty = true;
+    if (this.persistTimer) { return; }
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = undefined;
+      if (this.dirty) {
+        this.dirty = false;
+        this.persist();
+      }
+    }, 5000);
   }
 
   private persist(): void {

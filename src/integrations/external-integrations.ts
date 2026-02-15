@@ -92,7 +92,7 @@ export class ExternalIntegrations implements vscode.Disposable {
         message: `Issue #${data.number} skapad: ${data.html_url}`,
       };
     } catch (error) {
-      return { provider: 'github', success: false, message: `GitHub-fel: ${error}` };
+      return { provider: 'github', success: false, message: `GitHub-fel: ${error instanceof Error ? error.message : String(error)}` };
     }
   }
 
@@ -133,7 +133,7 @@ export class ExternalIntegrations implements vscode.Disposable {
         })),
       };
     } catch (error) {
-      return { provider: 'github', success: false, message: `${error}` };
+      return { provider: 'github', success: false, message: `GitHub-fel: ${error instanceof Error ? error.message : String(error)}` };
     }
   }
 
@@ -162,7 +162,7 @@ export class ExternalIntegrations implements vscode.Disposable {
 
       return { provider: 'slack', success: true, message: 'Meddelande skickat till Slack.' };
     } catch (error) {
-      return { provider: 'slack', success: false, message: `Slack-fel: ${error}` };
+      return { provider: 'slack', success: false, message: `Slack-fel: ${error instanceof Error ? error.message : String(error)}` };
     }
   }
 
@@ -246,7 +246,7 @@ export class ExternalIntegrations implements vscode.Disposable {
         message: `Jira-ticket skapad: ${data.key} — ${url}`,
       };
     } catch (error) {
-      return { provider: 'jira', success: false, message: `Jira-fel: ${error}` };
+      return { provider: 'jira', success: false, message: `Jira-fel: ${error instanceof Error ? error.message : String(error)}` };
     }
   }
 

@@ -172,7 +172,7 @@ export class ResponseCache {
   }
 
   dispose() {
-    // best-effort persist
-    this.persist();
+    // best-effort persist — awaiting not possible in dispose
+    void this.persist();
   }
 }

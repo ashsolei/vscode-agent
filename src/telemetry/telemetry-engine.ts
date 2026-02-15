@@ -31,9 +31,24 @@ const MAX_ENTRIES = 5000;
 export class TelemetryEngine implements vscode.Disposable {
   private entries: TelemetryEntry[] = [];
   private panel: vscode.WebviewPanel | undefined;
+  private persistTimer: ReturnType<typeof setTimeout> | undefined;
+  private dirty = false;
 
   constructor(private readonly globalState: vscode.Memento) {
     this.entries = globalState.get<TelemetryEntry[]>(TELEMETRY_KEY, []);
+  }
+
+  /** Debounced persist — skriver max var 5:e sekund */
+  private schedulePersist(): void {
+    this.dirty = true;
+    if (this.persistTimer) { return; }
+    this.persistTimer = setTimeout(async () => {
+      this.persistTimer = undefined;
+      if (this.dirty) {
+        this.dirty = false;
+        await this.globalState.update(TELEMETRY_KEY, this.entries);
+      }
+    }, 5000);
   }
 
   /** Logga ett anrop */
@@ -43,7 +58,7 @@ export class TelemetryEngine implements vscode.Disposable {
     if (this.entries.length > MAX_ENTRIES) {
       this.entries = this.entries.slice(-MAX_ENTRIES);
     }
-    await this.globalState.update(TELEMETRY_KEY, this.entries);
+    this.schedulePersist();
     // Uppdatera dashboard om öppet
     this.refreshPanel();
   }
@@ -233,6 +248,7 @@ export class TelemetryEngine implements vscode.Disposable {
 <html>
 <head>
   <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
   <style>
     :root { --bg: var(--vscode-editor-background); --fg: var(--vscode-editor-foreground); }
     body { font-family: var(--vscode-font-family); color: var(--fg); padding: 16px; }
@@ -350,6 +366,16 @@ export class TelemetryEngine implements vscode.Disposable {
   }
 
   dispose(): void {
+    // Flush pending writes synchronously before dispose
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = undefined;
+    }
+    if (this.dirty) {
+      this.dirty = false;
+      // best-effort synchronous-ish persist
+      void this.globalState.update(TELEMETRY_KEY, this.entries);
+    }
     this.panel?.dispose();
   }
 }

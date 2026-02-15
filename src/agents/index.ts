@@ -71,6 +71,20 @@ export class AgentRegistry {
   }
 
   /**
+   * Avregistrera en agent (t.ex. vid plugin-avinstallation).
+   * Returnerar true om agenten fanns och togs bort.
+   */
+  unregister(agentId: string): boolean {
+    const agent = this.agents.get(agentId);
+    if (!agent) { return false; }
+    this.agents.delete(agentId);
+    if (this.defaultAgent === agent) {
+      this.defaultAgent = this.agents.values().next().value;
+    }
+    return true;
+  }
+
+  /**
    * Lista alla registrerade agenter.
    */
   list(): BaseAgent[] {

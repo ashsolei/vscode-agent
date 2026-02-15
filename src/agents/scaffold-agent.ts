@@ -42,22 +42,24 @@ export class ScaffoldAgent extends BaseAgent {
       vscode.LanguageModelChatMessage.User(ctx.request.prompt),
     ];
 
-    const response = await ctx.request.model.sendRequest(messages, {}, ctx.token);
+    const fullResponse = await this.chatRaw(ctx, messages);
 
-    let fullResponse = '';
-    for await (const fragment of response.text) {
-      fullResponse += fragment;
-    }
+    if (this.isCancelled(ctx)) { return {}; }
 
-    // Extrahera JSON från svaret
-    const jsonMatch = fullResponse.match(/```json\s*([\s\S]*?)```/);
-    if (!jsonMatch) {
+    // Extrahera JSON från svaret (robust parsning)
+    const project = this.extractJson<{
+      projectName?: string;
+      files: Array<{ path: string; content: string }>;
+      postSetupCommands?: string[];
+      summary?: string;
+    }>(fullResponse);
+
+    if (!project) {
       ctx.stream.markdown('❌ Kunde inte generera projektstruktur. Försök med en mer specifik beskrivning.');
       return {};
     }
 
     try {
-      const project = JSON.parse(jsonMatch[1]);
 
       ctx.stream.markdown(`## 🏗️ Scaffolding: ${project.projectName}\n\n`);
       this.progress(ctx, `Skapar ${project.files.length} filer...`);
@@ -84,7 +86,7 @@ export class ScaffoldAgent extends BaseAgent {
       }
 
     } catch (err) {
-      ctx.stream.markdown(`❌ Fel vid parsning av projektstruktur: ${err}`);
+      ctx.stream.markdown(`❌ Fel vid skapande av projektfiler: ${this.formatError(err)}`);
     }
 
     return {

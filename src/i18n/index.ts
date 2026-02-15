@@ -232,8 +232,10 @@ export function t(key: string, ...args: (string | number)[]): string {
   const bundle = bundles[currentLocale] ?? bundles.en;
   let message = bundle[key] ?? bundles.en[key] ?? key;
 
-  for (let i = 0; i < args.length; i++) {
-    message = message.replace(`{${i}}`, String(args[i]));
+  // Replace from last arg to first to avoid double-replacement
+  // when arg values contain placeholder patterns
+  for (let i = args.length - 1; i >= 0; i--) {
+    message = message.replaceAll(`{${i}}`, String(args[i]));
   }
 
   return message;

@@ -269,11 +269,12 @@ export class NotificationCenter implements vscode.Disposable {
   }
 
   private playBell(): void {
-    // Terminal bell — skickar BEL-tecken
-    const terminal = vscode.window.terminals[0];
-    if (terminal) {
-      terminal.sendText('\x07', false);
-    }
+    // Använd VS Code:s inbyggda ljud-API istället för terminal BEL-tecken
+    // som kan korrumpera användarens terminalinput
+    vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Window, title: '🔔' },
+      () => new Promise<void>((resolve) => setTimeout(resolve, 500))
+    );
   }
 
   dispose(): void {
