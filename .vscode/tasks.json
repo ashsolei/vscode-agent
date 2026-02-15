@@ -12,7 +12,8 @@
     {
       "label": "git-push",
       "type": "shell",
-      "command": "git checkout -b feature/improvements && git add -A && git commit -m 'feat: agent improvements, tests, CI/CD, and documentation updates' && git push -u origin feature/improvements"
+      "command": "git stash --include-untracked && git pull --rebase origin main && git stash pop; rm -f scripts/git-check.sh; git add -A && git commit -m 'feat: add future-proof Copilot agent system with AI evolution layer, planning, and autonomy guardrails' && git push origin main && echo 'PUSHED TO MAIN'"
     }
   ]
+}  ]
 }
