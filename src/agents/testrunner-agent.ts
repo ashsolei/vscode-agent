@@ -44,7 +44,8 @@ export class TestRunnerAgent extends BaseAgent {
     super(
       'testrunner',
       'Test Runner',
-      'Kör tester automatiskt, analyserar fel och self-corrects'
+      'Kör tester automatiskt, analyserar fel och self-corrects',
+      { isAutonomous: true }
     );
     this.maxRetries = maxRetries;
   }

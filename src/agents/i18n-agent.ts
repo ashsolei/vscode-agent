@@ -34,7 +34,7 @@ Regler:
  */
 export class I18nAgent extends BaseAgent {
   constructor() {
-    super('i18n', 'I18n-agent', 'Internationalisering och översättning');
+    super('i18n', 'I18n-agent', 'Internationalisering och översättning', { isAutonomous: true });
   }
 
   async handle(ctx: AgentContext): Promise<AgentResult> {

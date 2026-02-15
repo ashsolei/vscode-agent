@@ -28,7 +28,7 @@ Regler:
  */
 export class ScaffoldAgent extends BaseAgent {
   constructor() {
-    super('scaffold', 'Projektgenerator', 'Generera hela projekt autonomt');
+    super('scaffold', 'Projektgenerator', 'Generera hela projekt autonomt', { isAutonomous: true });
   }
 
   async handle(ctx: AgentContext): Promise<AgentResult> {

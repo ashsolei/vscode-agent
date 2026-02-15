@@ -49,7 +49,7 @@ Analysera:
  */
 export class MetricsAgent extends BaseAgent {
   constructor() {
-    super('metrics', 'Metrikagent', 'Kodkvalitetsmetriker och analysrapport');
+    super('metrics', 'Metrikagent', 'Kodkvalitetsmetriker och analysrapport', { isAutonomous: true });
   }
 
   async handle(ctx: AgentContext): Promise<AgentResult> {

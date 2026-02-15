@@ -36,7 +36,7 @@ Regler:
  */
 export class DevOpsAgent extends BaseAgent {
   constructor() {
-    super('devops', 'DevOps-agent', 'CI/CD, Docker, Kubernetes, infrastruktur');
+    super('devops', 'DevOps-agent', 'CI/CD, Docker, Kubernetes, infrastruktur', { isAutonomous: true });
   }
 
   async handle(ctx: AgentContext): Promise<AgentResult> {

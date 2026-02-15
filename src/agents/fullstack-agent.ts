@@ -39,7 +39,7 @@ Regler:
  */
 export class FullstackAgent extends BaseAgent {
   constructor() {
-    super('fullstack', 'Fullstack-byggare', 'Bygg hela webbappar med frontend + backend + databas');
+    super('fullstack', 'Fullstack-byggare', 'Bygg hela webbappar med frontend + backend + databas', { isAutonomous: true });
   }
 
   async handle(ctx: AgentContext): Promise<AgentResult> {

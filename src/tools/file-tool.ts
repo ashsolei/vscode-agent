@@ -9,6 +9,19 @@ export class FileTool extends BaseTool {
     super('file', 'Filverktyg', 'Läs, sök och lista filer i arbetsytan');
   }
 
+  /**
+   * Validate a relative path stays within the workspace root.
+   */
+  private validatePath(filePath: string, wsRoot: vscode.WorkspaceFolder): vscode.Uri {
+    const uri = vscode.Uri.joinPath(wsRoot.uri, filePath);
+    const resolved = uri.fsPath;
+    const root = wsRoot.uri.fsPath;
+    if (!resolved.startsWith(root + '/') && resolved !== root) {
+      throw new Error(`Sökvägen '${filePath}' pekar utanför arbetsytan`);
+    }
+    return uri;
+  }
+
   async execute(
     params: Record<string, unknown>,
     _token: vscode.CancellationToken
@@ -34,11 +47,12 @@ export class FileTool extends BaseTool {
         return this.failure('Ingen arbetsyta öppen');
       }
 
-      const uri = vscode.Uri.joinPath(workspaceFolders[0].uri, filePath);
+      const uri = this.validatePath(filePath, workspaceFolders[0]);
       const content = await vscode.workspace.fs.readFile(uri);
       return this.success(new TextDecoder().decode(content));
     } catch (error) {
-      return this.failure(`Kunde inte läsa fil: ${filePath}`);
+      const msg = error instanceof Error ? error.message : `Kunde inte läsa fil: ${filePath}`;
+      return this.failure(msg);
     }
   }
 
@@ -59,7 +73,7 @@ export class FileTool extends BaseTool {
       }
 
       const baseUri = directory
-        ? vscode.Uri.joinPath(workspaceFolders[0].uri, directory)
+        ? this.validatePath(directory, workspaceFolders[0])
         : workspaceFolders[0].uri;
 
       const entries = await vscode.workspace.fs.readDirectory(baseUri);

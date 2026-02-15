@@ -2,7 +2,7 @@
 
 En modulär, utbyggbar agent-struktur för VS Code Chat med **30+ specialiserade AI-agenter**, autonoma filändringar, cross-window-synkronisering, marketplace, telemetri och en komplett utvecklingsplattform.
 
-**85+ filer · 12 000+ rader TypeScript · 30+ agenter · 25 moduler · 37 slash-commands · 30 kommandon · 85 enhetstester · CI/CD · i18n (EN/SV)**
+**85+ filer · 12 000+ rader TypeScript · 30+ agenter · 25 moduler · 37 slash-commands · 30 kommandon · 120+ enhetstester · CI/CD · Docker · i18n (EN/SV)**
 
 ---
 
@@ -42,8 +42,10 @@ En modulär, utbyggbar agent-struktur för VS Code Chat med **30+ specialiserade
 | **Agent Marketplace** | Bläddra, installera, publicera och betygsätt community-agenter |
 | **Response Cache** | LRU-cache för LLM-svar med TTL, eviction och agent-invalidering |
 | **i18n (EN/SV)** | Fullständigt tvåspråkigt stöd med `t()` translate-funktion |
-| **85 enhetstester** | Vitest med VS Code API-mock, 8 testfiler, v8 coverage |
-| **CI/CD** | GitHub Actions: build → lint → test → VSIX-paketering |
+| **120+ enhetstester** | Vitest med VS Code API-mock, 12+ testfiler, v8 coverage |
+| **CI/CD** | GitHub Actions: build → lint → test → VSIX → Docker |
+| **Docker** | Multi-stage Dockerfile för reproducerbar VSIX-paketning |
+| **Health Check** | Inbyggt diagnostikkommando för att verifiera systemstatus |
 | **E2E-tester** | `@vscode/test-electron` med integrationstester i riktig VS Code |
 | **16 inställningar** | Alla settings exponerade i VS Code Settings UI |
 | **8 tangentbordsgenvägar** | Cmd+Shift+A/D/S/H/N/U/T/M |
@@ -665,8 +667,14 @@ npm run test:e2e
 | Modul | Tester | Testar |
 |---|---|---|
 | AgentRegistry | 8 | register, resolve, delegate, chain |
+| AgentRegistry (ext.) | 12 | unregister, parallel, chain, duplicate, isAutonomous |
 | AgentMemory | 13 | remember, forget, recall, search, findByTags, prune, stats |
 | ResponseCache | 12 | set, get, TTL, eviction, invalidate, prune, stats |
+| MiddlewarePipeline | 7 | exec, skip, priority, error isolation, meta |
+| Built-in Middlewares | 7 | timing, usage tracking, rate limiting |
+| ToolRegistry | 6 | register, get, list, execute, createDefault |
+| FileTool | 5 | read, search, list, errors |
+| SearchTool | 3 | text search, empty results, missing query |
 | ConversationPersistence | 11 | add, list, search, tag, pin, startNew, load |
 | AgentProfileManager | 13 | activate, deactivate, create, duplicate, onDidChange |
 | SnippetLibrary | 6 | save, delete, search, toggleFavorite |
@@ -680,10 +688,88 @@ npm run test:e2e
 GitHub Actions körs automatiskt vid push/PR till `main`:
 
 ```
-Build (Node 18 + 20)  →  Lint  →  Test  →  Package VSIX
+Build (Node 18 + 20)  →  Lint  →  Test (coverage)  →  Package VSIX  →  Docker Build
 ```
 
 VSIX-artefakten laddas upp och kan hämtas från Actions-fliken.
+Concurrency groups förhindrar onödiga parallella körningar.
+
+---
+
+## 🐳 Docker
+
+Bygg extensionen som en Docker-image (multi-stage, reproducerbar):
+
+```bash
+# Bygg image
+docker build -t vscode-agent:latest .
+
+# Extrahera VSIX
+docker create --name vscode-tmp vscode-agent:latest
+docker cp vscode-tmp:/output/vscode-agent.vsix .
+docker rm vscode-tmp
+
+# Installera
+code --install-extension vscode-agent.vsix
+```
+
+Dockerfile använder 3 steg:
+1. **Builder** — installerar deps, kompilerar TypeScript
+2. **Packager** — bygger VSIX med `vsce`
+3. **Output** — minimal Alpine-image med VSIX-artefakt
+
+---
+
+## ⚙️ Environment Variables & Settings
+
+| Setting | Default | Beskrivning |
+|---|---|---|
+| `vscodeAgent.locale` | `auto` | Språk: `auto`, `en` eller `sv` |
+| `vscodeAgent.rateLimitPerMinute` | `30` | Max agentanrop per minut |
+| `vscodeAgent.defaultProfile` | `""` | Standard agentprofil |
+| `vscodeAgent.cache.enabled` | `true` | Aktivera LLM-cache |
+| `vscodeAgent.cache.maxEntries` | `200` | Max cacheade svar |
+| `vscodeAgent.cache.ttlMinutes` | `10` | Cache TTL i minuter |
+| `vscodeAgent.memory.pruneAfterDays` | `30` | Rensa minnen äldre än X dagar |
+| `vscodeAgent.memory.maxEntries` | `500` | Max antal minnen |
+| `vscodeAgent.guardrails.enabled` | `true` | Aktivera säkerhetsspärrar |
+| `vscodeAgent.guardrails.dryRun` | `false` | Visa ändringar utan att utföra |
+| `vscodeAgent.codeLens.enabled` | `true` | Visa inline-knappar |
+| `vscodeAgent.models.default` | `auto` | Standard LLM-modell |
+| `vscodeAgent.telemetry.enabled` | `true` | Aktivera lokal telemetri |
+| `vscodeAgent.notifications.enabled` | `true` | Aktivera notifieringar |
+| `vscodeAgent.sidebar.showOnStartup` | `false` | Visa sidopanel vid start |
+
+Projektspecifik konfiguration kan ställas in i `.agentrc.json` (se `Agent: Skapa .agentrc.json`).
+
+---
+
+## 🩺 Troubleshooting
+
+### Extensionen startar inte
+1. Kontrollera VS Code-versionen: ≥ 1.93.0 krävs
+2. Säkerställ att Copilot Chat är installerat
+3. Kör `⌘⇧P → Agent: Health Check` för systemdiagnostik
+4. Kontrollera Output-panelen ("VS Code Agent")
+
+### Agenten svarar inte
+1. Kolla att du inte nått rate limit (default: 30/min)
+2. Testa med `/status` för att verifiera att agenten är aktiv
+3. Rensa cache: `⌘⇧P → Agent: Rensa telemetri`
+
+### Tester misslyckas lokalt
+```bash
+# Rensa och bygg om
+rm -rf out/ node_modules/
+npm install
+npm run compile
+npm test
+```
+
+### Plugin laddas inte
+1. Verifiera att `.agent-plugins/` finns i workspace-roten
+2. JSON-filer måste ha korrekt format (se plugindokumentation)
+3. Plugins hot-reloadas — spara filen så laddas den om automatiskt
 
 ---
 

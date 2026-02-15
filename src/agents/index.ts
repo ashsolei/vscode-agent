@@ -31,6 +31,18 @@ export class AgentRegistry {
   }
 
   /**
+   * Avregistrera en agent från registret.
+   * Om den avregistrerade agenten är standardagenten, rensas standardvalet.
+   */
+  unregister(agentId: string): boolean {
+    const existed = this.agents.delete(agentId);
+    if (existed && this.defaultAgent?.id === agentId) {
+      this.defaultAgent = this.agents.values().next().value;
+    }
+    return existed;
+  }
+
+  /**
    * Sätt en specifik agent som standardagent.
    */
   setDefault(agentId: string): void {

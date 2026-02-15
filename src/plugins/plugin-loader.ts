@@ -58,8 +58,8 @@ class PluginAgent extends BaseAgent {
       '{{date}}': new Date().toISOString().split('T')[0],
     };
 
-    // Användardefinierade variabler
-    const allVars = { ...builtinVars, ...(this.definition.variables ?? {}) };
+    // Användardefinierade variabler (builtins vinner vid override)
+    const allVars = { ...(this.definition.variables ?? {}), ...builtinVars };
 
     for (const [key, value] of Object.entries(allVars)) {
       systemPrompt = systemPrompt.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), value);

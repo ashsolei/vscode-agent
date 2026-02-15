@@ -20,7 +20,8 @@ export class CreateAgentAgent extends BaseAgent {
     super(
       'create-agent',
       'Create Agent',
-      'Skapa nya agenter dynamiskt med AI'
+      'Skapa nya agenter dynamiskt med AI',
+      { isAutonomous: true }
     );
   }
 

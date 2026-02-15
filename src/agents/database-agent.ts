@@ -36,7 +36,7 @@ Regler:
  */
 export class DatabaseAgent extends BaseAgent {
   constructor() {
-    super('db', 'Databasagent', 'Databasedesign, migrationer, ORM-modeller');
+    super('db', 'Databasagent', 'Databasedesign, migrationer, ORM-modeller', { isAutonomous: true });
   }
 
   async handle(ctx: AgentContext): Promise<AgentResult> {

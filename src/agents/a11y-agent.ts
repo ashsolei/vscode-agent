@@ -50,7 +50,7 @@ Regler:
  */
 export class A11yAgent extends BaseAgent {
   constructor() {
-    super('a11y', 'Tillgänglighetsagent', 'A11Y-granskning och automatisk fix');
+    super('a11y', 'Tillgänglighetsagent', 'A11Y-granskning och automatisk fix', { isAutonomous: true });
   }
 
   async handle(ctx: AgentContext): Promise<AgentResult> {

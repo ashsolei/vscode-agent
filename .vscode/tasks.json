@@ -8,6 +8,11 @@
       "isBackground": true,
       "presentation": { "reveal": "never" },
       "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "git-push",
+      "type": "shell",
+      "command": "git checkout -b feature/improvements && git add -A && git commit -m 'feat: agent improvements, tests, CI/CD, and documentation updates' && git push -u origin feature/improvements"
     }
   ]
 }
