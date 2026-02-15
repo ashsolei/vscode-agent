@@ -36,7 +36,7 @@ Regler:
  */
 export class ComponentAgent extends BaseAgent {
   constructor() {
-    super('component', 'Komponentgenerator', 'Generera kompletta UI-komponenter');
+    super('component', 'Komponentgenerator', 'Generera kompletta UI-komponenter', { isAutonomous: true });
   }
 
   async handle(ctx: AgentContext): Promise<AgentResult> {

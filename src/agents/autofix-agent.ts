@@ -35,7 +35,7 @@ Regler:
  */
 export class AutoFixAgent extends BaseAgent {
   constructor() {
-    super('autofix', 'Autofixare', 'Hitta och fixa alla fel automatiskt');
+    super('autofix', 'Autofixare', 'Hitta och fixa alla fel automatiskt', { isAutonomous: true });
   }
 
   async handle(ctx: AgentContext): Promise<AgentResult> {

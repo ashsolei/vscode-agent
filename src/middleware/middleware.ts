@@ -87,7 +87,12 @@ export class MiddlewarePipeline {
       // --- AFTER-fas ---
       for (const mw of this.middlewares) {
         if (mw.after) {
-          await mw.after(info);
+          try {
+            await mw.after(info);
+          } catch (afterErr) {
+            // Isolate after-hook errors so they don't break the pipeline
+            console.error(`Middleware "${mw.name}" after-hook error:`, afterErr);
+          }
         }
       }
 
@@ -99,7 +104,12 @@ export class MiddlewarePipeline {
       // --- ERROR-fas ---
       for (const mw of this.middlewares) {
         if (mw.onError) {
-          await mw.onError(info);
+          try {
+            await mw.onError(info);
+          } catch (onErrErr) {
+            // Isolate onError-hook errors so original error propagates
+            console.error(`Middleware "${mw.name}" onError-hook error:`, onErrErr);
+          }
         }
       }
 

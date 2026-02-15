@@ -25,6 +25,21 @@ export class AutonomousExecutor {
 
   constructor(private stream: vscode.ChatResponseStream) {}
 
+  /**
+   * Validera att en relativ sökväg inte leder utanför arbetsytan.
+   * Avvisar sökvägar med '..' som pekar utanför roten.
+   */
+  private validatePath(relativePath: string, ws: vscode.WorkspaceFolder): vscode.Uri {
+    const uri = vscode.Uri.joinPath(ws.uri, relativePath);
+    const resolved = uri.fsPath;
+    const root = ws.uri.fsPath;
+    // Ensure the resolved path is within the workspace root
+    if (!resolved.startsWith(root + '/') && resolved !== root) {
+      throw new Error(`Sökvägen '${relativePath}' pekar utanför arbetsytan`);
+    }
+    return uri;
+  }
+
   /** Hämta logg över alla utförda åtgärder */
   get log(): ActionResult[] {
     return [...this.actionLog];
@@ -40,12 +55,13 @@ export class AutonomousExecutor {
     }
 
     try {
-      const uri = vscode.Uri.joinPath(ws.uri, relativePath);
+      const uri = this.validatePath(relativePath, ws);
       await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(content));
       this.stream.progress(`✅ Skapade ${relativePath}`);
       return this.record('createFile', true, `Skapade ${relativePath}`, [relativePath]);
     } catch (err) {
-      return this.record('createFile', false, `Misslyckades skapa ${relativePath}: ${err}`);
+      const msg = err instanceof Error ? err.message : 'Okänt fel';
+      return this.record('createFile', false, `Misslyckades skapa ${relativePath}: ${msg}`);
     }
   }
 
@@ -57,7 +73,7 @@ export class AutonomousExecutor {
     if (!ws) { return null; }
 
     try {
-      const uri = vscode.Uri.joinPath(ws.uri, relativePath);
+      const uri = this.validatePath(relativePath, ws);
       const content = await vscode.workspace.fs.readFile(uri);
       return new TextDecoder().decode(content);
     } catch {
@@ -73,7 +89,7 @@ export class AutonomousExecutor {
     if (!ws) { return false; }
 
     try {
-      const uri = vscode.Uri.joinPath(ws.uri, relativePath);
+      const uri = this.validatePath(relativePath, ws);
       await vscode.workspace.fs.stat(uri);
       return true;
     } catch {
@@ -90,7 +106,7 @@ export class AutonomousExecutor {
 
     try {
       const uri = relativePath
-        ? vscode.Uri.joinPath(ws.uri, relativePath)
+        ? this.validatePath(relativePath, ws)
         : ws.uri;
       const entries = await vscode.workspace.fs.readDirectory(uri);
       return entries.map(([name, type]) => ({
@@ -146,7 +162,7 @@ export class AutonomousExecutor {
     const ws = vscode.workspace.workspaceFolders?.[0];
     if (!ws) { return; }
 
-    const uri = vscode.Uri.joinPath(ws.uri, relativePath);
+    const uri = this.validatePath(relativePath, ws);
     const doc = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(doc, { preview: false });
   }
@@ -165,7 +181,7 @@ export class AutonomousExecutor {
     }
 
     try {
-      const uri = vscode.Uri.joinPath(ws.uri, relativePath);
+      const uri = this.validatePath(relativePath, ws);
       const content = await vscode.workspace.fs.readFile(uri);
       const text = new TextDecoder().decode(content);
 
@@ -178,7 +194,8 @@ export class AutonomousExecutor {
       this.stream.progress(`✏️ Redigerade ${relativePath}`);
       return this.record('editFile', true, `Redigerade ${relativePath}`, [relativePath]);
     } catch (err) {
-      return this.record('editFile', false, `Misslyckades redigera ${relativePath}: ${err}`);
+      const msg = err instanceof Error ? err.message : 'Okänt fel';
+      return this.record('editFile', false, `Misslyckades redigera ${relativePath}: ${msg}`);
     }
   }
 
@@ -203,12 +220,13 @@ export class AutonomousExecutor {
     }
 
     try {
-      const uri = vscode.Uri.joinPath(ws.uri, relativePath);
+      const uri = this.validatePath(relativePath, ws);
       await vscode.workspace.fs.delete(uri);
       this.stream.progress(`🗑️ Tog bort ${relativePath}`);
       return this.record('deleteFile', true, `Tog bort ${relativePath}`, [relativePath]);
     } catch (err) {
-      return this.record('deleteFile', false, `Misslyckades ta bort ${relativePath}: ${err}`);
+      const msg = err instanceof Error ? err.message : 'Okänt fel';
+      return this.record('deleteFile', false, `Misslyckades ta bort ${relativePath}: ${msg}`);
     }
   }
 
@@ -253,11 +271,17 @@ export class AutonomousExecutor {
     options?: { cwd?: string; name?: string; timeout?: number }
   ): Promise<ActionResult> {
     const ws = vscode.workspace.workspaceFolders?.[0];
-    const cwd = options?.cwd
-      ? vscode.Uri.file(options.cwd)
-      : ws?.uri;
-
-    if (!cwd) {
+    // Validate cwd is within workspace if specified
+    let cwd: vscode.Uri;
+    if (options?.cwd) {
+      const cwdUri = vscode.Uri.file(options.cwd);
+      if (ws && !cwdUri.fsPath.startsWith(ws.uri.fsPath)) {
+        return this.record('runCommand', false, `cwd '${options.cwd}' pekar utanför arbetsytan`);
+      }
+      cwd = cwdUri;
+    } else if (ws) {
+      cwd = ws.uri;
+    } else {
       return this.record('runCommand', false, 'Ingen arbetsyta öppen');
     }
 
@@ -316,7 +340,8 @@ export class AutonomousExecutor {
         return this.record('runCommand', false, `Kommando "${command}" avslutades med kod ${exitCode}`);
       }
     } catch (err) {
-      return this.record('runCommand', false, `Kommando "${command}" misslyckades: ${err}`);
+      const msg = err instanceof Error ? err.message : 'Okänt fel';
+      return this.record('runCommand', false, `Kommando "${command}" misslyckades: ${msg}`);
     }
   }
 

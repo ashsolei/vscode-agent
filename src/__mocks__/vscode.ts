@@ -160,3 +160,54 @@ export enum ProgressLocation {
   SourceControl = 1,
   Window = 10,
 }
+
+export enum DiagnosticSeverity {
+  Error = 0,
+  Warning = 1,
+  Information = 2,
+  Hint = 3,
+}
+
+export enum FileType {
+  Unknown = 0,
+  File = 1,
+  Directory = 2,
+  SymbolicLink = 64,
+}
+
+export class Range {
+  constructor(
+    public readonly start: Position,
+    public readonly end: Position,
+  ) {}
+}
+
+export class Position {
+  constructor(
+    public readonly line: number,
+    public readonly character: number,
+  ) {}
+}
+
+export class Selection extends Range {
+  constructor(
+    public readonly anchor: Position,
+    public readonly active: Position,
+  ) {
+    super(anchor, active);
+  }
+  get isEmpty(): boolean {
+    return this.start.line === this.end.line && this.start.character === this.end.character;
+  }
+}
+
+export class RelativePattern {
+  constructor(
+    public readonly base: any,
+    public readonly pattern: string,
+  ) {}
+}
+
+export const lm = {
+  selectChatModels: vi.fn().mockResolvedValue([]),
+};

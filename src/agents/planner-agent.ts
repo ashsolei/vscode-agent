@@ -47,7 +47,7 @@ Regler:
  */
 export class PlannerAgent extends BaseAgent {
   constructor(private state: SharedState) {
-    super('plan', 'Planeringsagent', 'Planera och exekvera komplexa implementationer');
+    super('plan', 'Planeringsagent', 'Planera och exekvera komplexa implementationer', { isAutonomous: true });
   }
 
   async handle(ctx: AgentContext): Promise<AgentResult> {

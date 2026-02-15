@@ -38,7 +38,7 @@ Regler:
  */
 export class CliAgent extends BaseAgent {
   constructor() {
-    super('cli', 'CLI-byggare', 'Skapa kompletta kommandoradsprogram');
+    super('cli', 'CLI-byggare', 'Skapa kompletta kommandoradsprogram', { isAutonomous: true });
   }
 
   async handle(ctx: AgentContext): Promise<AgentResult> {

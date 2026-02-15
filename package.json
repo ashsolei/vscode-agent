@@ -300,6 +300,10 @@
       {
         "command": "vscode-agent.showMarketplace",
         "title": "Agent: Öppna Marketplace"
+      },
+      {
+        "command": "vscode-agent.healthCheck",
+        "title": "Agent: Health Check"
       }
     ],
     "viewsContainers": {
@@ -471,6 +475,13 @@
           "type": "boolean",
           "default": false,
           "description": "Auto-show Agent Explorer sidebar on startup"
+        },
+        "vscodeAgent.rateLimitPerMinute": {
+          "type": "number",
+          "default": 30,
+          "minimum": 5,
+          "maximum": 200,
+          "description": "Maximum agent invocations per minute (rate limiting)"
         }
       }
     },

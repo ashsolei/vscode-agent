@@ -1,0 +1,30 @@
+# Build artifacts
+out/
+dist/
+*.vsix
+coverage/
+
+# Dependencies
+node_modules/
+
+# Dev / IDE
+.vscode/
+.devcontainer/
+.git/
+.github/
+
+# Tests (not needed in image)
+src/**/*.test.ts
+src/__mocks__/
+src/test/
+
+# Docs
+*.md
+!README.md
+!CHANGELOG.md
+!LICENSE
+
+# OS / misc
+.DS_Store
+Thumbs.db
+.env*

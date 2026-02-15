@@ -36,7 +36,7 @@ Regler:
  */
 export class DocGenAgent extends BaseAgent {
   constructor() {
-    super('docgen', 'Dokumentationsgenerator', 'Generera komplett projektdokumentation');
+    super('docgen', 'Dokumentationsgenerator', 'Generera komplett projektdokumentation', { isAutonomous: true });
   }
 
   async handle(ctx: AgentContext): Promise<AgentResult> {

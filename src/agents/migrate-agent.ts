@@ -46,7 +46,7 @@ Regler:
  */
 export class MigrateAgent extends BaseAgent {
   constructor() {
-    super('migrate', 'Migreringsagent', 'Migrera mellan ramverk och versioner');
+    super('migrate', 'Migreringsagent', 'Migrera mellan ramverk och versioner', { isAutonomous: true });
   }
 
   async handle(ctx: AgentContext): Promise<AgentResult> {

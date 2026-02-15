@@ -107,7 +107,8 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(outputChannel);
 
   const middleware = new MiddlewarePipeline();
-  middleware.use(createRateLimitMiddleware(30));
+  const rateLimitPerMin = vscode.workspace.getConfiguration('vscodeAgent').get<number>('rateLimitPerMinute', 30);
+  middleware.use(createRateLimitMiddleware(rateLimitPerMin));
   middleware.use(createTimingMiddleware(outputChannel));
   middleware.use(createUsageMiddleware(context.globalState));
 
@@ -334,9 +335,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     // GuardRails: skapa checkpoint för autonoma agenter
-    const isAutonomous = ['scaffold', 'autofix', 'devops', 'db', 'migrate',
-      'component', 'fullstack', 'cli', 'docgen'].includes(agent.id);
-    if (guardrailsEnabled && isAutonomous) {
+    if (guardrailsEnabled && agent.isAutonomous) {
       if (guardrailsDryRun) {
         guardrails.dryRun([{ action: 'run', target: agent.id, detail: request.prompt }]);
         return { metadata: { command: request.command ?? 'default', dryRun: true } };
@@ -365,11 +364,31 @@ export function activate(context: vscode.ExtensionContext) {
       });
 
       // Injicera arbetsytekontext automatiskt (git diff, diagnostik, etc.)
-      const workspaceContext = await contextProviders.buildPromptContext(2000);
-      ctx.workspaceContext = workspaceContext;
+      try {
+        const workspaceContext = await contextProviders.buildPromptContext(2000);
+        ctx.workspaceContext = workspaceContext;
+      } catch {
+        // Degrade gracefully if context gathering fails
+        ctx.workspaceContext = '';
+      }
 
       // Kör genom middleware-pipeline (timing, rate-limit, usage)
-      const result = await middleware.execute(agent, ctx);
+      // Wrap stream to capture agent output for caching
+      let agentResponseText = '';
+      const captureStream = new Proxy(stream, {
+        get(target, prop) {
+          if (prop === 'markdown') {
+            return (value: string | vscode.MarkdownString) => {
+              const text = typeof value === 'string' ? value : value.value;
+              agentResponseText += text;
+              target.markdown(value);
+            };
+          }
+          return Reflect.get(target, prop);
+        },
+      });
+      const captureCtx: AgentContext = { ...ctx, stream: captureStream };
+      const result = await middleware.execute(agent, captureCtx);
 
       // Dashboard: logga slut
       dashboard.logEnd(dashId, true);
@@ -384,10 +403,11 @@ export function activate(context: vscode.ExtensionContext) {
       statusBar.updateCache(responseCache.stats);
 
       // Cache: spara lyckat svar för framtida cache-hits
-      if (cacheEnabled && request.command) {
+      // Note: We cache a summary marker — full response caching is not possible
+      // since agent output is streamed directly to the chat UI.
+      if (cacheEnabled && request.command && agentResponseText) {
         const cacheKey = ResponseCache.makeKey(request.prompt, request.command);
-        const cachedValue = JSON.stringify({ agentId: agent.id, ok: true, ts: Date.now() });
-        await responseCache.set(cacheKey, cachedValue, { agentId: agent.id });
+        await responseCache.set(cacheKey, agentResponseText, { agentId: agent.id });
       }
 
       // Telemetri: logga framgång
@@ -554,8 +574,7 @@ export function activate(context: vscode.ExtensionContext) {
       statusBar.updatePlugins(pluginLoader.listPlugins().length);
     },
     (agentId) => {
-      // Agenter kan inte avregistreras från AgentRegistry just nu,
-      // men vi loggar det:
+      registry.unregister(agentId);
       outputChannel.appendLine(`Plugin avregistrerad: ${agentId}`);
       statusBar.updatePlugins(pluginLoader.listPlugins().length);
     }
@@ -565,6 +584,8 @@ export function activate(context: vscode.ExtensionContext) {
       outputChannel.appendLine(`Laddade ${plugins.length} plugins`);
       statusBar.updatePlugins(plugins.length);
     }
+  }).catch((err) => {
+    outputChannel.appendLine(`Plugin-laddning misslyckades: ${err}`);
   });
   context.subscriptions.push(pluginLoader);
 
@@ -821,6 +842,36 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('vscode-agent.showMarketplace', () => {
       marketplace.showBrowser();
+    })
+  );
+
+  // --- Health Check kommando ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.healthCheck', async () => {
+      const cacheStats = responseCache.stats;
+      const memStats = memory.stats();
+      const agentCount = registry.list().length;
+      const pluginCount = pluginLoader.listPlugins().length;
+      const activeProfile = profileManager.active;
+
+      const health = {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        agents: { registered: agentCount, default: 'code' },
+        plugins: { loaded: pluginCount },
+        cache: cacheStats,
+        memory: memStats,
+        profile: activeProfile?.id ?? 'none',
+        guardrails: { enabled: guardrailsEnabled, dryRun: guardrailsDryRun },
+        rateLimit: { perMinute: rateLimitPerMin },
+        locale: vscode.workspace.getConfiguration('vscodeAgent').get<string>('locale', 'auto'),
+      };
+
+      const doc = await vscode.workspace.openTextDocument({
+        content: JSON.stringify(health, null, 2),
+        language: 'json',
+      });
+      await vscode.window.showTextDocument(doc);
     })
   );
 

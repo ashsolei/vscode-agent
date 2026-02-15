@@ -27,11 +27,17 @@ export interface AgentContext {
  * Varje specialiserad agent ärver denna och implementerar `handle()`.
  */
 export abstract class BaseAgent {
+  /** Whether this agent performs autonomous file/terminal operations */
+  public readonly isAutonomous: boolean;
+
   constructor(
     public readonly id: string,
     public readonly name: string,
-    public readonly description: string
-  ) {}
+    public readonly description: string,
+    options?: { isAutonomous?: boolean }
+  ) {
+    this.isAutonomous = options?.isAutonomous ?? false;
+  }
 
   /**
    * Huvudmetoden som hanterar ett chat-meddelande.
@@ -74,19 +80,32 @@ export abstract class BaseAgent {
       vscode.LanguageModelChatMessage.User(userMessage ?? ctx.request.prompt)
     );
 
-    const chatResponse = await ctx.request.model.sendRequest(
-      messages,
-      {},
-      ctx.token
-    );
+    try {
+      const chatResponse = await ctx.request.model.sendRequest(
+        messages,
+        {},
+        ctx.token
+      );
 
-    let fullResponse = '';
-    for await (const fragment of chatResponse.text) {
-      ctx.stream.markdown(fragment);
-      fullResponse += fragment;
+      let fullResponse = '';
+      for await (const fragment of chatResponse.text) {
+        if (ctx.token.isCancellationRequested) {
+          break;
+        }
+        ctx.stream.markdown(fragment);
+        fullResponse += fragment;
+      }
+
+      return fullResponse;
+    } catch (error) {
+      if (ctx.token.isCancellationRequested) {
+        ctx.stream.markdown('\n\n*— Operation cancelled.*');
+        return '';
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      ctx.stream.markdown(`\n\n⚠️ Model error: ${message}`);
+      throw error;
     }
-
-    return fullResponse;
   }
 
   /**
