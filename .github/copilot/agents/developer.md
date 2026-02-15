@@ -85,3 +85,56 @@ npm run test:coverage  # With v8 coverage
 5. Slash command added to `package.json`
 6. Test file exists for new code
 7. No runtime dependencies added
+
+## Capability Declarations
+
+This agent requires the following AI capabilities:
+
+- **code-generation**
+- **tool-use**
+- **file-editing**
+- **terminal-access**
+- **codebase-search**
+
+When a required capability is unavailable, fall back to the next-best alternative. Degrade gracefully — never fail silently.
+
+## I/O Contract
+
+**Input:**
+- Feature requirements, code context, file paths
+- Shared workspace context from `ContextProviderRegistry`
+- Agent memory from `AgentMemory` (relevant prior interactions)
+
+**Output:**
+- Implemented code changes, new files, updated tests
+- Structured metadata in `AgentResult.metadata`
+- Optional follow-up suggestions in `AgentResult.followUps`
+
+**Error Output:**
+- Clear error description with root cause
+- Suggested recovery action
+- Escalation path if unrecoverable
+
+## Adaptation Hooks
+
+This agent should be updated when:
+
+1. **New AI capabilities arrive** — check if new features improve this agent's task quality
+2. **Project architecture changes** — update domain context and conventions
+3. **New tools/MCP servers available** — integrate if relevant to this agent's scope
+4. **Performance data shows degradation** — review and optimize prompts/workflows
+5. **New best practices emerge** — incorporate improved patterns
+
+**Self-check frequency:** After every major capability registry update.
+**Update trigger:** When `CAPABILITY-REGISTRY.md` changes or `self-improve` agent flags this agent.
+
+## Model Preferences
+
+| Priority | Model | Reason |
+|---|---|---|
+| Primary | Copilot | Best fit for this agent's primary tasks |
+| Fallback 1 | Claude | Good alternative with different strengths |
+| Fallback 2 | GPT-4 | Strong reasoning for complex configurations |
+| Cost-sensitive | Local (Ollama) | For simple sub-tasks when cost matters |
+
+Route via `ModelSelector` in code or `model-router.md` agent. Never hardcode a specific model version.

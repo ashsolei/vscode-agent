@@ -90,3 +90,54 @@ abstract class BaseAgent {
 - Never register commands or participants not declared in `package.json`
 - Never call `stream.markdown()` after the handler has returned — responses must be synchronous with the handler lifecycle
 - Never mutate `AgentContext` — treat it as read-only within agent handlers
+
+## Capability Declarations
+
+This agent requires the following AI capabilities:
+
+- **code-generation**
+- **structured-output**
+- **codebase-search**
+
+When a required capability is unavailable, fall back to the next-best alternative. Degrade gracefully — never fail silently.
+
+## I/O Contract
+
+**Input:**
+- API requirements, endpoint specifications, data models
+- Shared workspace context from `ContextProviderRegistry`
+- Agent memory from `AgentMemory` (relevant prior interactions)
+
+**Output:**
+- API implementation, OpenAPI specs, client code, tests
+- Structured metadata in `AgentResult.metadata`
+- Optional follow-up suggestions in `AgentResult.followUps`
+
+**Error Output:**
+- Clear error description with root cause
+- Suggested recovery action
+- Escalation path if unrecoverable
+
+## Adaptation Hooks
+
+This agent should be updated when:
+
+1. **New AI capabilities arrive** — check if new features improve API design quality
+2. **Project architecture changes** — update domain context and conventions
+3. **New tools/MCP servers available** — integrate if relevant to API development
+4. **Performance data shows degradation** — review and optimize prompts/workflows
+5. **New best practices emerge** — incorporate improved patterns
+
+**Self-check frequency:** After every major capability registry update.
+**Update trigger:** When `CAPABILITY-REGISTRY.md` changes or `self-improve` agent flags this agent.
+
+## Model Preferences
+
+| Priority | Model | Reason |
+|---|---|---|
+| Primary | Copilot | IDE-native code generation |
+| Fallback 1 | Claude | Large context for complex API design |
+| Fallback 2 | GPT-4 | Good structured output for specs |
+| Cost-sensitive | Local (Ollama) | For simple sub-tasks when cost matters |
+
+Route via `ModelSelector` in code or `model-router.md` agent. Never hardcode a specific model version.
