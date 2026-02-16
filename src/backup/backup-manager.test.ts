@@ -122,7 +122,7 @@ describe('BackupManager', () => {
       expect(ok).toBe(true);
 
       // Bara memory-nyckeln ska vara uppdaterad
-      const updatedKeys = state.update.mock.calls.map(([k]: [string]) => k);
+      const updatedKeys = state.update.mock.calls.map(([k]: [string, unknown]) => k);
       expect(updatedKeys).toContain('agentMemories');
       expect(updatedKeys).not.toContain('agent-snippets');
     });

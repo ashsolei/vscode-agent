@@ -152,7 +152,7 @@ describe('PromptTemplateEngine', () => {
   // ─── List & Sök ──────────────────────────────────────────────
 
   describe('list', () => {
-    it('filtrerlar efter kategori', () => {
+    it('filtrerar efter kategori', () => {
       engine.register({
         name: 'A', template: '{{x}}', variables: [], category: 'Kodkvalitet', tags: [],
       });

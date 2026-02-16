@@ -37,7 +37,7 @@ export interface QueueConfig {
   maxQueueSize: number;
   /** Dedupliceringsintervall i ms — liknande förfrågningar inom detta intervall slås samman (default: 2000) */
   deduplicateWindowMs: number;
-  /** Standardpriorittet för nya förfrågningar */
+  /** Standardprioritet för nya förfrågningar */
   defaultPriority: RequestPriority;
 }
 
@@ -451,7 +451,7 @@ export class AgentRequestQueue implements vscode.Disposable {
       name: 'request-queue',
       priority: 5, // Kör tidigt — före timing/usage men efter rate-limit
       before: async (info: MiddlewareInfo) => {
-        // Spåra att vi passerate kön
+        // Spåra att vi passerade kön
         info.meta['queue.enqueued'] = true;
         info.meta['queue.size'] = this.queue.length;
         info.meta['queue.active'] = this.processing.size;

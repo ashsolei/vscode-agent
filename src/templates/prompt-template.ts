@@ -94,7 +94,7 @@ const BUILTIN_TEMPLATES: Omit<PromptTemplate, 'id' | 'createdAt' | 'updatedAt'>[
     template: 'Refaktorera {{modul}} för att förbättra {{mål}}. Nuvarande problem: {{problem}}. Bevara bakåtkompatibilitet.',
     variables: [
       { name: 'modul', description: 'Modul att refaktorera', required: true, type: 'string' },
-      { name: 'mål', description: 'Refaktoreingsmål', required: false, type: 'choice', choices: ['läsbarhet', 'prestanda', 'testbarhet', 'modularitet'], defaultValue: 'läsbarhet' },
+      { name: 'mål', description: 'Refaktoreringsmål', required: false, type: 'choice', choices: ['läsbarhet', 'prestanda', 'testbarhet', 'modularitet'], defaultValue: 'läsbarhet' },
       { name: 'problem', description: 'Nuvarande problem', required: true, type: 'string' },
     ],
     agentId: 'refactor',
