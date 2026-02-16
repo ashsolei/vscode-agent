@@ -5,6 +5,29 @@ All notable changes to the **VS Code Agent** extension will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2025-07-12
+
+### Added
+- **Plugin DiffPreview injection** — dynamically loaded plugin agents now receive `DiffPreview` via `setDiffPreview()` in the plugin loader callback, fixing a bug where plugin agents bypassed interactive diff review
+- **Profile deep wiring** — `profileManager.onDidChange` subscription wires `guardLevel` → guardrails (strict = always enabled, relaxed = disabled, normal = settings default), `models` → `ModelSelector.updateConfig()`, `middleware` → output channel logging; deactivation resets all to VS Code settings defaults
+- **Dynamic Plugins tree category** — `AgentTreeProvider.getChildren()` now detects agents not in any hardcoded category and groups them into a dynamic "Plugins" category with a plug icon; category only appears when uncategorized agents exist
+- **maxSteps enforcement** — `AutonomousExecutor` gains step counting with configurable `maxSteps` (default 10 via `vscodeAgent.autonomous.maxSteps`); `createFile`, `editFile`, `deleteFile`, `runCommand` each consume a step; read-only operations are free; throws when limit exceeded
+- **Live settings reload** — `vscode.workspace.onDidChangeConfiguration` listener handles all settings sections: `rateLimitPerMinute` rebuilds middleware pipeline, `guardrails.*` toggles guardrails/dry-run, `notifications/telemetry/cache/codeLens` update at runtime without restart
+- **`MiddlewarePipeline.clear()`** — new method to remove all middlewares, enabling live pipeline rebuild on settings change
+- **20 new unit tests** — maxSteps enforcement (8), dynamic Plugins category (5), middleware `clear()` (2), profile wiring with guardLevel/models/middleware/deactivation (5)
+
+### Changed
+- `AutonomousExecutor` constructor accepts optional `maxSteps` parameter (reads from config if omitted)
+- 7 settings variables in `extension.ts` changed from `const` to `let` to support live settings reload and profile wiring
+- `MiddlewarePipeline` exposes `clear()` for pipeline teardown and rebuild
+
+### Improved
+- Total tests: 775 across 40 test files (up from 757/40)
+- Plugin agents have full feature parity with builtin agents (DiffPreview injection)
+- Profile activation now has real side effects beyond agent filtering
+- Settings changes take effect immediately without extension restart
+- Autonomous agents have bounded execution preventing runaway operations
+
 ## [0.6.0] - 2025-07-11
 
 ### Added

@@ -124,6 +124,14 @@ export class AgentTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       const stats = this.globalState.get<Record<string, number>>('agentUsageStats') ?? {};
       const result: CategoryTreeItem[] = [];
 
+      // Samla alla agent-ID som tillhör en statisk kategori
+      const categorizedIds = new Set<string>();
+      for (const agentIds of this.categories.values()) {
+        for (const id of agentIds) {
+          categorizedIds.add(id);
+        }
+      }
+
       for (const [catName, agentIds] of this.categories) {
         const agentItems: AgentTreeItem[] = [];
         for (const id of agentIds) {
@@ -145,6 +153,17 @@ export class AgentTreeProvider implements vscode.TreeDataProvider<TreeNode> {
           };
           result.push(new CategoryTreeItem(catName, agentItems, icons[catName] ?? 'folder'));
         }
+      }
+
+      // Dynamisk "Plugins"-kategori för agenter som inte tillhör någon statisk kategori
+      const pluginItems: AgentTreeItem[] = [];
+      for (const agent of this.registry.list()) {
+        if (!categorizedIds.has(agent.id)) {
+          pluginItems.push(new AgentTreeItem(agent, stats[agent.id] ?? 0));
+        }
+      }
+      if (pluginItems.length > 0) {
+        result.push(new CategoryTreeItem('Plugins', pluginItems, 'plug'));
       }
 
       return result;

@@ -24,15 +24,42 @@ export interface ActionResult {
  */
 export class AutonomousExecutor {
   private actionLog: ActionResult[] = [];
+  private stepCount = 0;
+  private readonly maxSteps: number;
 
   /**
    * @param stream ChatResponseStream för progress-rapportering
    * @param diffPreview Om satt, samlas ändringar för förhandsgranskning istället för direkt skrivning
+   * @param maxSteps Maximalt antal muterande åtgärder (default: 10)
    */
   constructor(
     private stream: vscode.ChatResponseStream,
-    private diffPreview?: DiffPreview
-  ) {}
+    private diffPreview?: DiffPreview,
+    maxSteps?: number
+  ) {
+    this.maxSteps = maxSteps
+      ?? vscode.workspace.getConfiguration('vscodeAgent.autonomous').get<number>('maxSteps', 10);
+  }
+
+  /**
+   * Kontrollera om max antal steg har uppnåtts.
+   * Kastar fel om gränsen är nådd.
+   */
+  private guardStep(action: string): void {
+    if (this.stepCount >= this.maxSteps) {
+      throw new Error(
+        `Max antal åtgärder (${this.maxSteps}) uppnått. Avbryter "${action}". ` +
+        `Öka gränsen via inställningen vscodeAgent.autonomous.maxSteps.`
+      );
+    }
+    this.stepCount++;
+    this.stream.progress(`📊 Steg ${this.stepCount}/${this.maxSteps}`);
+  }
+
+  /** Antal muterande steg som utförts */
+  get steps(): number {
+    return this.stepCount;
+  }
 
   /**
    * Validera att en relativ sökväg inte leder utanför arbetsytan.
@@ -70,6 +97,7 @@ export class AutonomousExecutor {
     }
 
     try {
+      this.guardStep('createFile');
       this.validatePath(relativePath, ws);
 
       if (this.diffPreview) {
@@ -211,6 +239,7 @@ export class AutonomousExecutor {
     }
 
     try {
+      this.guardStep('editFile');
       const uri = this.validatePath(relativePath, ws);
       const content = await vscode.workspace.fs.readFile(uri);
       const text = new TextDecoder().decode(content);
@@ -265,6 +294,7 @@ export class AutonomousExecutor {
     }
 
     try {
+      this.guardStep('deleteFile');
       const uri = this.validatePath(relativePath, ws);
 
       if (this.diffPreview) {
@@ -352,6 +382,7 @@ export class AutonomousExecutor {
     const timeout = options?.timeout ?? 60_000; // default 60s
 
     try {
+      this.guardStep('runCommand');
       this.stream.progress(`🖥️ Kör: ${command}`);
 
       // Skapa en ShellExecution-task

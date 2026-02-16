@@ -57,6 +57,13 @@ export class MiddlewarePipeline {
   }
 
   /**
+   * Ta bort alla middlewares.
+   */
+  clear(): void {
+    this.middlewares = [];
+  }
+
+  /**
    * Kör en agent genom hela middleware-pipelinen.
    */
   async execute(agent: BaseAgent, ctx: AgentContext): Promise<AgentResult> {

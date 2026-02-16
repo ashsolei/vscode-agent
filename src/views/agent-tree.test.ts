@@ -150,4 +150,51 @@ describe('AgentTreeProvider', () => {
       expect((agents[0] as any).tooltip).toBeDefined();
     });
   });
+
+  describe('dynamic Plugins category', () => {
+    it('should show plugin agents in Plugins category', () => {
+      // Register a normal agent and a plugin agent
+      registry.register(new MockAgent('code', 'Code', 'Code analysis'));
+      registry.register(new MockAgent('plugin-custom', 'Custom Plugin', 'A custom plugin agent'));
+      const categories = provider.getChildren();
+      const plugins = categories.find((c: any) => c.label === 'Plugins');
+      expect(plugins).toBeDefined();
+      const pluginAgents = provider.getChildren(plugins!);
+      expect(pluginAgents.length).toBe(1);
+      expect((pluginAgents[0] as any).agent.id).toBe('plugin-custom');
+    });
+
+    it('should not show Plugins category when no uncategorized agents exist', () => {
+      registry.register(new MockAgent('code', 'Code', 'Code analysis'));
+      const categories = provider.getChildren();
+      const plugins = categories.find((c: any) => c.label === 'Plugins');
+      expect(plugins).toBeUndefined();
+    });
+
+    it('should show multiple plugin agents in Plugins category', () => {
+      registry.register(new MockAgent('plugin-a', 'Plugin A', 'First plugin'));
+      registry.register(new MockAgent('plugin-b', 'Plugin B', 'Second plugin'));
+      const categories = provider.getChildren();
+      const plugins = categories.find((c: any) => c.label === 'Plugins');
+      expect(plugins).toBeDefined();
+      const pluginAgents = provider.getChildren(plugins!);
+      expect(pluginAgents.length).toBe(2);
+    });
+
+    it('should use plug icon for Plugins category', () => {
+      registry.register(new MockAgent('plugin-x', 'Plugin X', 'A plugin'));
+      const categories = provider.getChildren();
+      const plugins = categories.find((c: any) => c.label === 'Plugins');
+      expect((plugins as any).iconPath?.id).toBe('plug');
+    });
+
+    it('should not put known agents in Plugins category', () => {
+      registry.register(new MockAgent('code', 'Code', 'Code analysis'));
+      registry.register(new MockAgent('security', 'Security', 'Security scanning'));
+      registry.register(new MockAgent('scaffold', 'Scaffold', 'Scaffolding'));
+      const categories = provider.getChildren();
+      const plugins = categories.find((c: any) => c.label === 'Plugins');
+      expect(plugins).toBeUndefined();
+    });
+  });
 });

@@ -380,4 +380,76 @@ describe('AutonomousExecutor', () => {
       });
     });
   });
+
+  // ─── maxSteps enforcement ────────────────────────────
+
+  describe('maxSteps enforcement', () => {
+    it('should allow actions within step limit', async () => {
+      const limitedExecutor = new AutonomousExecutor(stream as any, undefined, 3);
+      setupWorkspace();
+      const r1 = await limitedExecutor.createFile('src/a.ts', 'a');
+      const r2 = await limitedExecutor.createFile('src/b.ts', 'b');
+      const r3 = await limitedExecutor.createFile('src/c.ts', 'c');
+      expect(r1.success).toBe(true);
+      expect(r2.success).toBe(true);
+      expect(r3.success).toBe(true);
+      expect(limitedExecutor.steps).toBe(3);
+    });
+
+    it('should throw when exceeding maxSteps', async () => {
+      const limitedExecutor = new AutonomousExecutor(stream as any, undefined, 2);
+      setupWorkspace();
+      await limitedExecutor.createFile('src/a.ts', 'a');
+      await limitedExecutor.createFile('src/b.ts', 'b');
+      // Third action exceeds limit
+      const r3 = await limitedExecutor.createFile('src/c.ts', 'c');
+      expect(r3.success).toBe(false);
+      expect(r3.detail).toContain('Max antal');
+    });
+
+    it('should count editFile toward step limit', async () => {
+      const limitedExecutor = new AutonomousExecutor(stream as any, undefined, 1);
+      setupWorkspace();
+      (workspace.fs.readFile as any).mockResolvedValueOnce(Buffer.from('const x = 1;'));
+      await limitedExecutor.editFile('src/app.ts', 'const x = 1', 'const x = 2');
+      // Second action should fail
+      const r2 = await limitedExecutor.createFile('src/b.ts', 'b');
+      expect(r2.success).toBe(false);
+      expect(r2.detail).toContain('Max antal');
+    });
+
+    it('should count deleteFile toward step limit', async () => {
+      const limitedExecutor = new AutonomousExecutor(stream as any, undefined, 1);
+      setupWorkspace();
+      await limitedExecutor.deleteFile('src/old.ts');
+      const r2 = await limitedExecutor.createFile('src/b.ts', 'b');
+      expect(r2.success).toBe(false);
+    });
+
+    it('should show step progress', async () => {
+      const limitedExecutor = new AutonomousExecutor(stream as any, undefined, 5);
+      setupWorkspace();
+      await limitedExecutor.createFile('src/a.ts', 'a');
+      expect(stream.progress).toHaveBeenCalledWith('📊 Steg 1/5');
+    });
+
+    it('should default maxSteps from configuration', () => {
+      const defaultExecutor = new AutonomousExecutor(stream as any);
+      // Default from mock vscode.workspace.getConfiguration is 10
+      expect(defaultExecutor.steps).toBe(0);
+    });
+
+    it('should not count read-only operations toward step limit', async () => {
+      const limitedExecutor = new AutonomousExecutor(stream as any, undefined, 1);
+      setupWorkspace();
+      // Read operations should NOT count
+      await limitedExecutor.readFile('src/app.ts');
+      await limitedExecutor.fileExists('src/app.ts');
+      await limitedExecutor.listDir('src');
+      // First mutating action should still succeed
+      const result = await limitedExecutor.createFile('src/a.ts', 'a');
+      expect(result.success).toBe(true);
+      expect(limitedExecutor.steps).toBe(1);
+    });
+  });
 });

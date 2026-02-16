@@ -122,6 +122,64 @@ describe('AgentProfileManager', () => {
     expect(listener).toHaveBeenCalledWith(expect.objectContaining({ id: 'frontend' }));
   });
 
+  it('should emit onDidChange with guardLevel when profile has it', async () => {
+    await manager.create({
+      id: 'strict-profile',
+      name: 'Strict Mode',
+      icon: '🔒',
+      description: 'Strict guardrails',
+      agents: ['code', 'review'],
+      guardLevel: 'strict',
+    });
+    const listener = vi.fn();
+    manager.onDidChange(listener);
+    await manager.activate('strict-profile');
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'strict-profile', guardLevel: 'strict' }),
+    );
+  });
+
+  it('should emit onDidChange with models when profile has models config', async () => {
+    await manager.create({
+      id: 'model-profile',
+      name: 'Model Override',
+      icon: '🤖',
+      description: 'Custom models',
+      agents: ['code'],
+      models: { default: 'gpt-4o', code: 'claude-sonnet' },
+    });
+    const listener = vi.fn();
+    manager.onDidChange(listener);
+    await manager.activate('model-profile');
+    const emitted = listener.mock.calls[0][0];
+    expect(emitted.models).toEqual({ default: 'gpt-4o', code: 'claude-sonnet' });
+  });
+
+  it('should emit onDidChange with middleware when profile has it', async () => {
+    await manager.create({
+      id: 'mw-profile',
+      name: 'MW Profile',
+      icon: '⚙️',
+      description: 'Middleware config',
+      agents: ['code'],
+      middleware: ['logging', 'timing'],
+    });
+    const listener = vi.fn();
+    manager.onDidChange(listener);
+    await manager.activate('mw-profile');
+    const emitted = listener.mock.calls[0][0];
+    expect(emitted.middleware).toEqual(['logging', 'timing']);
+  });
+
+  it('should emit undefined on deactivation', async () => {
+    const listener = vi.fn();
+    manager.onDidChange(listener);
+    await manager.activate('frontend');
+    await manager.deactivate();
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(listener.mock.calls[1][0]).toBeUndefined();
+  });
+
   it('should clean up on dispose', () => {
     expect(() => manager.dispose()).not.toThrow();
   });

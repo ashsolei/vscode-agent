@@ -91,7 +91,7 @@ export function activate(context: vscode.ExtensionContext) {
     maxEntries: cacheConfig.get<number>('maxEntries', 200),
     defaultTtl: (cacheConfig.get<number>('ttlMinutes', 10)) * 60 * 1000,
   });
-  const cacheEnabled = cacheConfig.get<boolean>('enabled', true);
+  let cacheEnabled = cacheConfig.get<boolean>('enabled', true);
 
   // --- 2b. Skapa persistent minne ---
   const memoryConfig = vscode.workspace.getConfiguration('vscodeAgent.memory');
@@ -107,7 +107,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(outputChannel);
 
   const middleware = new MiddlewarePipeline();
-  const rateLimitPerMin = vscode.workspace.getConfiguration('vscodeAgent').get<number>('rateLimitPerMinute', 30);
+  let rateLimitPerMin = vscode.workspace.getConfiguration('vscodeAgent').get<number>('rateLimitPerMinute', 30);
   middleware.use(createRateLimitMiddleware(rateLimitPerMin));
   middleware.use(createTimingMiddleware(outputChannel));
   middleware.use(createUsageMiddleware(context.globalState));
@@ -117,8 +117,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   // --- 2e. Skapa guard rails ---
   const guardrailsConfig = vscode.workspace.getConfiguration('vscodeAgent.guardrails');
-  const guardrailsEnabled = guardrailsConfig.get<boolean>('enabled', true);
-  const guardrailsDryRun = guardrailsConfig.get<boolean>('dryRun', false);
+  let guardrailsEnabled = guardrailsConfig.get<boolean>('enabled', true);
+  let guardrailsDryRun = guardrailsConfig.get<boolean>('dryRun', false);
   const guardrails = new GuardRails();
 
   // --- 2f. Skapa config manager ---
@@ -138,7 +138,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(snippetLibrary);
 
   // --- 2g3. Skapa notification center ---
-  const notificationsEnabled = vscode.workspace.getConfiguration('vscodeAgent.notifications').get<boolean>('enabled', true);
+  let notificationsEnabled = vscode.workspace.getConfiguration('vscodeAgent.notifications').get<boolean>('enabled', true);
   const notifications = new NotificationCenter();
   context.subscriptions.push(notifications);
 
@@ -157,7 +157,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(conversationPersistence);
 
   // --- 2g6. Skapa telemetry engine ---
-  const telemetryEnabled = vscode.workspace.getConfiguration('vscodeAgent').get<boolean>('telemetry.enabled', true);
+  let telemetryEnabled = vscode.workspace.getConfiguration('vscodeAgent').get<boolean>('telemetry.enabled', true);
   const telemetry = new TelemetryEngine(context.globalState);
   context.subscriptions.push(telemetry);
 
@@ -262,6 +262,47 @@ export function activate(context: vscode.ExtensionContext) {
   for (const agent of registry.list()) {
     agent.setDiffPreview(diffPreview);
   }
+
+  // --- 3a2. Profil deep-wiring: reagera på profilbyten ---
+  profileManager.onDidChange((profile) => {
+    if (profile) {
+      // Wire guardLevel → guardrails-beteende
+      if (profile.guardLevel === 'strict') {
+        guardrailsEnabled = true;
+        guardrailsDryRun = false;
+      } else if (profile.guardLevel === 'relaxed') {
+        guardrailsEnabled = false;
+        guardrailsDryRun = false;
+      } else {
+        // 'normal' — återställ till settings-default
+        const cfg = vscode.workspace.getConfiguration('vscodeAgent.guardrails');
+        guardrailsEnabled = cfg.get<boolean>('enabled', true);
+        guardrailsDryRun = cfg.get<boolean>('dryRun', false);
+      }
+
+      // Wire models → ModelSelector
+      if (profile.models && Object.keys(profile.models).length > 0) {
+        const modelConfig: Record<string, { family: string }> = {};
+        for (const [category, model] of Object.entries(profile.models)) {
+          modelConfig[category] = { family: model };
+        }
+        modelSelector.updateConfig(modelConfig);
+      }
+
+      // Wire middleware → MiddlewarePipeline (logga för nu)
+      if (profile.middleware && profile.middleware.length > 0) {
+        outputChannel.appendLine(`[Profile] Middleware: ${profile.middleware.join(', ')}`);
+      }
+
+      outputChannel.appendLine(`[Profile] Aktiverad: ${profile.icon} ${profile.name} (guard: ${profile.guardLevel ?? 'normal'})`);
+    } else {
+      // Profil avaktiverad — återställ till settings-default
+      const cfg = vscode.workspace.getConfiguration('vscodeAgent.guardrails');
+      guardrailsEnabled = cfg.get<boolean>('enabled', true);
+      guardrailsDryRun = cfg.get<boolean>('dryRun', false);
+      outputChannel.appendLine('[Profile] Avaktiverad — standardinställningar återställda');
+    }
+  });
 
   // --- 3b. Skapa workflow-engine ---
   const workflowEngine = new WorkflowEngine(registry);
@@ -793,7 +834,7 @@ export function activate(context: vscode.ExtensionContext) {
   }
 
   // --- 5c. Registrera CodeLens ---
-  const codeLensEnabled = vscode.workspace.getConfiguration('vscodeAgent.codeLens').get<boolean>('enabled', true);
+  let codeLensEnabled = vscode.workspace.getConfiguration('vscodeAgent.codeLens').get<boolean>('enabled', true);
   const codeLensProvider = new AgentCodeLensProvider();
   codeLensProvider.setEnabled(codeLensEnabled);
   context.subscriptions.push(
@@ -845,6 +886,70 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
+  // --- 5d3. Live settings reload ---
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('vscodeAgent')) {
+        const cfg = vscode.workspace.getConfiguration('vscodeAgent');
+
+        // Rate limit
+        if (e.affectsConfiguration('vscodeAgent.rateLimitPerMinute')) {
+          rateLimitPerMin = cfg.get<number>('rateLimitPerMinute', 30);
+          middleware.clear();
+          middleware.use(createRateLimitMiddleware(rateLimitPerMin));
+          middleware.use(createTimingMiddleware(outputChannel));
+          middleware.use(createUsageMiddleware(context.globalState));
+          outputChannel.appendLine(`[Settings] rateLimitPerMinute = ${rateLimitPerMin}`);
+        }
+
+        // Guardrails
+        if (e.affectsConfiguration('vscodeAgent.guardrails')) {
+          const grCfg = vscode.workspace.getConfiguration('vscodeAgent.guardrails');
+          guardrailsEnabled = grCfg.get<boolean>('enabled', true);
+          guardrailsDryRun = grCfg.get<boolean>('dryRun', false);
+          outputChannel.appendLine(`[Settings] guardrails: enabled=${guardrailsEnabled}, dryRun=${guardrailsDryRun}`);
+        }
+
+        // Notifications
+        if (e.affectsConfiguration('vscodeAgent.notifications')) {
+          notificationsEnabled = vscode.workspace.getConfiguration('vscodeAgent.notifications').get<boolean>('enabled', true);
+          outputChannel.appendLine(`[Settings] notifications.enabled = ${notificationsEnabled}`);
+        }
+
+        // Telemetry
+        if (e.affectsConfiguration('vscodeAgent.telemetry')) {
+          telemetryEnabled = cfg.get<boolean>('telemetry.enabled', true);
+          outputChannel.appendLine(`[Settings] telemetry.enabled = ${telemetryEnabled}`);
+        }
+
+        // Cache
+        if (e.affectsConfiguration('vscodeAgent.cache')) {
+          const cacheCfg = vscode.workspace.getConfiguration('vscodeAgent.cache');
+          cacheEnabled = cacheCfg.get<boolean>('enabled', true);
+          outputChannel.appendLine(`[Settings] cache.enabled = ${cacheEnabled}`);
+        }
+
+        // CodeLens
+        if (e.affectsConfiguration('vscodeAgent.codeLens')) {
+          codeLensEnabled = vscode.workspace.getConfiguration('vscodeAgent.codeLens').get<boolean>('enabled', true);
+          codeLensProvider.setEnabled(codeLensEnabled);
+          outputChannel.appendLine(`[Settings] codeLens.enabled = ${codeLensEnabled}`);
+        }
+
+        // Locale
+        if (e.affectsConfiguration('vscodeAgent.locale')) {
+          const locale = cfg.get<string>('locale', 'auto');
+          if (locale === 'auto') {
+            initI18n();
+          } else {
+            setLocale(locale as Locale);
+          }
+          outputChannel.appendLine(`[Settings] locale = ${locale}`);
+        }
+      }
+    })
+  );
+
   // --- 5e. Skapa marketplace ---
   const marketplace = new AgentMarketplace(
     context.globalState,
@@ -872,6 +977,7 @@ export function activate(context: vscode.ExtensionContext) {
       agent.setMemory(memory);
       agent.setModelSelector(modelSelector);
       agent.setTools(tools);
+      agent.setDiffPreview(diffPreview);
       treeProvider.refresh();
       statusBar.updatePlugins(pluginLoader.listPlugins().length);
     },

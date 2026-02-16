@@ -197,3 +197,31 @@ describe('MiddlewarePipeline error isolation', () => {
     ).rejects.toThrow('original');
   });
 });
+
+describe('MiddlewarePipeline.clear()', () => {
+  it('should remove all middlewares', async () => {
+    const pipeline = new MiddlewarePipeline();
+    const beforeFn = vi.fn();
+    pipeline.use({ name: 'mw1', before: beforeFn });
+    pipeline.use({ name: 'mw2', before: beforeFn });
+
+    pipeline.clear();
+
+    await pipeline.execute(makeAgent(), makeCtx());
+    expect(beforeFn).not.toHaveBeenCalled();
+  });
+
+  it('should allow re-adding middlewares after clear', async () => {
+    const pipeline = new MiddlewarePipeline();
+    const oldBefore = vi.fn();
+    const newBefore = vi.fn();
+    pipeline.use({ name: 'old', before: oldBefore });
+
+    pipeline.clear();
+    pipeline.use({ name: 'new', before: newBefore });
+
+    await pipeline.execute(makeAgent(), makeCtx());
+    expect(oldBefore).not.toHaveBeenCalled();
+    expect(newBefore).toHaveBeenCalled();
+  });
+});
