@@ -5,6 +5,21 @@ All notable changes to the **VS Code Agent** extension will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2025-07-13
+
+### Added
+
+- **Agent Request Queue & Scheduler** (`src/queue/`) — Priority-based request queue preventing concurrent agent conflicts; 4 priority levels (Critical, High, Normal, Low); configurable concurrency (default: 3), max queue size (50), deduplication window (2s); integrates as middleware (priority 5) in the pipeline; queue status/stats UI commands: `Agent: Visa förfrågningskö`, `Agent: Visa köstatistik`; events: onDidEnqueue, onDidProcess, onDidCancel, onQueueDrain; QueueOverflowError when full
+- **Prompt Template Engine** (`src/templates/`) — Parameterized, reusable prompt templates with `{{variable}}` interpolation; 5 built-in templates (Kodgranskning, Buggrapport, Feature-begäran, Refaktoreringsplan, Testgenerering); variable types: string, choice, file; CRUD operations with persistent storage (globalState); search by keyword/tag, filter by category/agentId; interactive fill-and-render via QuickPick; export/import JSON; commands: `Agent: Använd promptmall`, `Agent: Hantera promptmallar`
+- **Data Backup & Restore** (`src/backup/`) — Centralized backup/restore of all persistent agent data (memory, snippets, conversations, telemetry, profiles, history, templates, marketplace); selective module backup via QuickPick multi-select; auto-backup on dispose; max 20 backups with smart pruning (preserves manual, removes oldest auto); export/import backup bundles as JSON; commands: `Agent: Skapa backup`, `Agent: Återställ backup`, `Agent: Visa backup-sammanfattning`
+
+### Improved
+
+- Total tests: 1173 across 46 test files (up from 1068/43)
+- Request queue: 35 tests covering enqueue, dequeue, priority ordering, deduplication, pause/resume, stats, middleware
+- Prompt template engine: 31 tests covering CRUD, rendering, variables, defaults, built-ins, search, export/import, UI
+- Backup manager: 27 tests covering create, restore, delete, prune, export/import, UI pickers, auto-backup
+
 ## [0.11.0] - 2025-07-13
 
 ### Added

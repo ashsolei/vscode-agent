@@ -66,6 +66,9 @@ import { createCaptureStream } from './utils';
 import { AgentRetryHandler } from './retry';
 import { CommandHistory } from './history';
 import { AgentHealthMonitor } from './health';
+import { AgentRequestQueue } from './queue';
+import { PromptTemplateEngine } from './templates';
+import { BackupManager } from './backup';
 
 /**
  * Extension entry point.
@@ -155,6 +158,18 @@ export function activate(context: vscode.ExtensionContext) {
   healthMonitor.onAgentDisabled(({ agentId, reason }) => {
     outputChannel.appendLine(`[Health] Agent "${agentId}" disabled: ${reason}`);
   });
+
+  // --- 2d5. Skapa request queue ---
+  const requestQueue = new AgentRequestQueue();
+  context.subscriptions.push(requestQueue);
+  middleware.use(requestQueue.createMiddleware());
+
+  // --- 2d6. Skapa prompt template engine ---
+  const templateEngine = new PromptTemplateEngine(context.globalState);
+  context.subscriptions.push(templateEngine);
+
+  // --- 2d7. Skapa backup manager ---
+  const backupManager = new BackupManager(context.globalState);
 
   // --- 2e. Skapa guard rails ---
   const guardrailsConfig = vscode.workspace.getConfiguration('vscodeAgent.guardrails');
@@ -1410,6 +1425,63 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // --- Request Queue kommandon ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.showQueue', () => {
+      requestQueue.showQueueStatus();
+    })
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.showQueueStats', () => {
+      requestQueue.showQueueStats();
+    })
+  );
+
+  // --- Prompt Template kommandon ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.showTemplates', async () => {
+      const result = await templateEngine.pickAndRender();
+      if (result) {
+        const doc = await vscode.workspace.openTextDocument({ content: result.rendered.text, language: 'markdown' });
+        await vscode.window.showTextDocument(doc);
+      }
+    })
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.manageTemplates', () => {
+      templateEngine.pick();
+    })
+  );
+
+  // --- Backup kommandon ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.createBackup', async () => {
+      const label = await vscode.window.showInputBox({ prompt: 'Backup-etikett', placeHolder: 'Före refaktorering...' });
+      if (!label) { return; }
+      const modules = await backupManager.showModulePicker();
+      if (!modules) { return; }
+      const id = await backupManager.createBackup(label, modules);
+      vscode.window.showInformationMessage(`Backup skapad: ${id}`);
+    })
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.restoreBackup', async () => {
+      const id = await backupManager.showRestorePicker();
+      if (!id) { return; }
+      const ok = await backupManager.restoreBackup(id);
+      if (ok) {
+        vscode.window.showInformationMessage('Backup återställd. Ladda om fönstret för att se ändringarna.');
+      } else {
+        vscode.window.showErrorMessage('Kunde inte återställa backup.');
+      }
+    })
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.showBackupSummary', () => {
+      backupManager.showBackupSummary();
+    })
+  );
+
   // --- Health Check kommando ---
   context.subscriptions.push(
     vscode.commands.registerCommand('vscode-agent.healthCheck', async () => {
@@ -1470,6 +1542,9 @@ export function activate(context: vscode.ExtensionContext) {
       retryHandler.dispose();
       commandHistory.dispose();
       healthMonitor.dispose();
+      requestQueue.dispose();
+      templateEngine.dispose();
+      backupManager.dispose();
     },
   });
 

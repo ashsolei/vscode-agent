@@ -332,6 +332,34 @@
       {
         "command": "vscode-agent.healthCheck",
         "title": "Agent: Health Check"
+      },
+      {
+        "command": "vscode-agent.showQueue",
+        "title": "Agent: Visa förfrågningskö"
+      },
+      {
+        "command": "vscode-agent.showQueueStats",
+        "title": "Agent: Visa köstatistik"
+      },
+      {
+        "command": "vscode-agent.showTemplates",
+        "title": "Agent: Använd promptmall"
+      },
+      {
+        "command": "vscode-agent.manageTemplates",
+        "title": "Agent: Hantera promptmallar"
+      },
+      {
+        "command": "vscode-agent.createBackup",
+        "title": "Agent: Skapa backup"
+      },
+      {
+        "command": "vscode-agent.restoreBackup",
+        "title": "Agent: Återställ backup"
+      },
+      {
+        "command": "vscode-agent.showBackupSummary",
+        "title": "Agent: Visa backup-sammanfattning"
       }
     ],
     "viewsContainers": {
