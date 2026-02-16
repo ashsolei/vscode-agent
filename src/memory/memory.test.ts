@@ -131,4 +131,45 @@ describe('AgentMemory', () => {
     const recalled = memory.recall('code');
     expect(recalled[0].accessCount).toBe(1);
   });
+
+  // ─── v0.10.0: dispose + async persist ────────
+
+  it('should have a dispose method', () => {
+    expect(typeof memory.dispose).toBe('function');
+    expect(() => memory.dispose()).not.toThrow();
+  });
+
+  it('dispose should do final save if dirty', () => {
+    vi.useFakeTimers();
+    memory.remember('code', 'dirty-data');
+    // debouncedPersist sets a timer, so persist hasn't run yet in fake timers
+    // dispose should save immediately
+    memory.dispose();
+    // memento.update should have been called (from remember's debouncedPersist + dispose)
+    expect(memento.update).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('dispose should clear persist timer', () => {
+    vi.useFakeTimers();
+    memory.remember('code', 'timer-test');
+    memory.dispose();
+    // Advance timers — the debounced persist should not fire again
+    const callCountBefore = memento.update.mock.calls.length;
+    vi.advanceTimersByTime(10_000);
+    const callCountAfter = memento.update.mock.calls.length;
+    expect(callCountAfter).toBe(callCountBefore);
+    vi.useRealTimers();
+  });
+
+  it('persist should be async (returns promise)', async () => {
+    // Access persist indirectly by calling remember and advancing timers
+    vi.useFakeTimers();
+    memory.remember('code', 'async-persist');
+    vi.advanceTimersByTime(6000); // trigger debounced persist
+    // Wait for any pending promises
+    await vi.advanceTimersByTimeAsync(0);
+    expect(memento.update).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
 });

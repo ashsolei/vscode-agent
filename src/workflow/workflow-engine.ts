@@ -229,6 +229,17 @@ export class WorkflowEngine {
     let lastError = '';
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      if (ctx.token.isCancellationRequested) {
+        return {
+          stepName: step.name,
+          agentId: step.agentId,
+          text: '',
+          success: false,
+          skipped: true,
+          durationMs: 0,
+          retries: attempt,
+        };
+      }
       const startTime = Date.now();
 
       try {

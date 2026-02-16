@@ -109,7 +109,8 @@ export function activate(context: vscode.ExtensionContext) {
 
   const middleware = new MiddlewarePipeline();
   let rateLimitPerMin = vscode.workspace.getConfiguration('vscodeAgent').get<number>('rateLimitPerMinute', 30);
-  middleware.use(createRateLimitMiddleware(rateLimitPerMin));
+  const rateLimiter = createRateLimitMiddleware(rateLimitPerMin);
+  middleware.use(rateLimiter);
   middleware.use(createTimingMiddleware(outputChannel));
   middleware.use(createUsageMiddleware(context.globalState));
 
@@ -929,10 +930,7 @@ export function activate(context: vscode.ExtensionContext) {
         // Rate limit
         if (e.affectsConfiguration('vscodeAgent.rateLimitPerMinute')) {
           rateLimitPerMin = cfg.get<number>('rateLimitPerMinute', 30);
-          middleware.clear();
-          middleware.use(createRateLimitMiddleware(rateLimitPerMin));
-          middleware.use(createTimingMiddleware(outputChannel));
-          middleware.use(createUsageMiddleware(context.globalState));
+          rateLimiter.updateLimit(rateLimitPerMin);
           outputChannel.appendLine(`[Settings] rateLimitPerMinute = ${rateLimitPerMin}`);
         }
 
@@ -1347,6 +1345,8 @@ export function activate(context: vscode.ExtensionContext) {
       telemetry.dispose();
       integrations.dispose();
       marketplace.dispose();
+      memory.dispose();
+      guardrails.dispose();
     },
   });
 

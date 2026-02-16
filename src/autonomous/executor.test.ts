@@ -508,4 +508,32 @@ describe('AutonomousExecutor', () => {
       expect(results[2].detail).toContain('Överhoppad');
     });
   });
+
+  // ─── v0.10.0: CWD validation ─────────────────
+
+  describe('runCommand CWD validation', () => {
+    it('should reject cwd that is a prefix attack path', async () => {
+      setupWorkspace('/workspace');
+      const result = await executor.runCommand('ls', { cwd: '/workspace-evil' });
+      expect(result.success).toBe(false);
+      expect(result.detail).toContain('utanför arbetsytan');
+    });
+
+    it('should reject cwd completely outside workspace', async () => {
+      setupWorkspace('/workspace');
+      const result = await executor.runCommand('ls', { cwd: '/tmp/evil' });
+      expect(result.success).toBe(false);
+      expect(result.detail).toContain('utanför arbetsytan');
+    });
+
+    it('should accept cwd that is the workspace root', async () => {
+      setupWorkspace('/workspace');
+      const result = await executor.runCommand('echo hi', { cwd: '/workspace' });
+      // Will fail on task execution mock, but should NOT fail on CWD validation
+      // If the error is about cwd, the test fails; any other error means cwd passed
+      if (!result.success) {
+        expect(result.detail).not.toContain('utanför arbetsytan');
+      }
+    });
+  });
 });

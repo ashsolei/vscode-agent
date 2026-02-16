@@ -396,7 +396,7 @@ export class AutonomousExecutor {
     let cwd: vscode.Uri;
     if (options?.cwd) {
       const cwdUri = vscode.Uri.file(options.cwd);
-      if (ws && !cwdUri.fsPath.startsWith(ws.uri.fsPath)) {
+      if (ws && !cwdUri.fsPath.startsWith(ws.uri.fsPath + '/') && cwdUri.fsPath !== ws.uri.fsPath) {
         return this.record('runCommand', false, `cwd '${options.cwd}' pekar utanför arbetsytan`);
       }
       cwd = cwdUri;

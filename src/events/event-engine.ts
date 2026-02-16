@@ -40,6 +40,7 @@ export class EventDrivenEngine {
   private intervals: ReturnType<typeof setInterval>[] = [];
   private lastTrigger = new Map<string, number>();
   private outputChannel: vscode.OutputChannel;
+  private activated = false;
 
   /** Event som avfyras när en regel triggas */
   private _onDidTrigger = new vscode.EventEmitter<{ ruleId: string; agentId: string; event: string }>();
@@ -64,6 +65,16 @@ export class EventDrivenEngine {
     this.rules.push(rule);
     this.persistRules();
     this.log(`Lade till regel: ${rule.id} (${rule.event} → ${rule.agentId})`);
+
+    // Om redan aktiverad och regeln är onInterval, starta timer direkt
+    if (this.activated && rule.enabled && rule.event === 'onInterval' && rule.intervalMs) {
+      const interval = setInterval(() => {
+        if (rule.enabled) {
+          this.triggerRule(rule, {});
+        }
+      }, rule.intervalMs);
+      this.intervals.push(interval);
+    }
   }
 
   /**
@@ -102,6 +113,7 @@ export class EventDrivenEngine {
    * Aktivera event-lyssnare baserat på registrerade regler.
    */
   activate(): void {
+    this.activated = true;
     // onSave
     this.disposables.push(
       vscode.workspace.onDidSaveTextDocument((doc) => {

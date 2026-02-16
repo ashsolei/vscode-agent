@@ -465,6 +465,52 @@ describe('WorkflowEngine', () => {
       expect(results[0].success).toBe(false);
       expect(results[0].retries).toBe(0);
     });
+
+    // ─── v0.10.0: cancellation during retry ───
+
+    it('stoppar retry-loop om cancellation begärs', async () => {
+      let attempts = 0;
+      const cancelToken = {
+        isCancellationRequested: false,
+        onCancellationRequested: vi.fn(),
+      };
+
+      registry = createMockRegistry(async () => {
+        attempts++;
+        // Trigger cancellation after first failed attempt
+        cancelToken.isCancellationRequested = true;
+        throw new Error('retry-fel');
+      });
+      engine = new WorkflowEngine(registry);
+
+      const cancelCtx = {
+        request: { prompt: 'test', command: undefined },
+        chatContext: { history: [] },
+        stream: {
+          markdown: vi.fn(),
+          progress: vi.fn(),
+          reference: vi.fn(),
+          button: vi.fn(),
+          anchor: vi.fn(),
+        },
+        token: cancelToken,
+      } as unknown as AgentContext;
+
+      const wf = makeWorkflow({
+        steps: [makeStep({ name: 'cancel-retry', retries: 5 })],
+      });
+
+      const results = await engine.run(wf, cancelCtx);
+
+      // First attempt fails, sets cancel flag. Retry loop checks cancel at top
+      // of next iteration and returns skipped result.
+      const step = results.find(r => r.stepName === 'cancel-retry');
+      expect(step).toBeDefined();
+      expect(step!.skipped).toBe(true);
+      expect(step!.success).toBe(false);
+      // Should only have 1 delegate call (the failed one that set cancel)
+      expect(attempts).toBe(1);
+    });
   });
 
   // ─── Parallella grupper ───

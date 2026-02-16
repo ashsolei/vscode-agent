@@ -300,6 +300,44 @@ describe('PluginLoader', () => {
       expect(unregisterCallback).toHaveBeenCalledWith('plugin-removable');
       expect(loader.listPlugins()).toHaveLength(0);
     });
+
+    // ─── v0.10.0: URI-to-plugin-ID mapping ───
+
+    it('ska använda URI-mappning, inte filnamn, för att hitta plugin-ID vid borttagning', async () => {
+      // Plugin with id different from filename
+      const def = makePluginDef({ id: 'my-custom-id', name: 'Custom' });
+      const uri = vscode.Uri.file('/workspace/.agent-plugins/different-filename.json');
+
+      vi.mocked(vscode.workspace.findFiles).mockResolvedValue([uri]);
+      vi.mocked(vscode.workspace.fs.readFile).mockResolvedValue(encodeJson(def));
+
+      await loader.scanAndLoad();
+      expect(loader.listPlugins()).toHaveLength(1);
+      expect(loader.listPlugins()[0].id).toBe('plugin-my-custom-id');
+
+      // Setup watcher
+      let deleteHandler: ((uri: vscode.Uri) => void) | undefined;
+      const mockWatcher = {
+        onDidCreate: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+        onDidChange: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+        onDidDelete: vi.fn().mockImplementation((handler: any) => {
+          deleteHandler = handler;
+          return { dispose: vi.fn() };
+        }),
+        dispose: vi.fn(),
+      };
+      vi.mocked(vscode.workspace.createFileSystemWatcher).mockReturnValue(mockWatcher as any);
+      vi.mocked(vscode.workspace.findFiles).mockResolvedValue([]);
+
+      await loader.activate();
+
+      // Trigger delete with same URI (filename differs from plugin ID)
+      deleteHandler!(vscode.Uri.file('/workspace/.agent-plugins/different-filename.json'));
+
+      // Should use the URI mapping, not derive from filename
+      expect(unregisterCallback).toHaveBeenCalledWith('plugin-my-custom-id');
+      expect(loader.listPlugins()).toHaveLength(0);
+    });
   });
 
   // ─── dispose ─────────────────────────────────

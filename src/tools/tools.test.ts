@@ -208,6 +208,56 @@ describe('TerminalTool', () => {
     expect(mockTerminal.sendText).toHaveBeenCalledWith('npm test');
     expect(mockTerminal.show).toHaveBeenCalled();
   });
+
+  // ─── v0.10.0: path traversal ─────────────────
+
+  it('should reject cwd with .. segments', async () => {
+    const result = await tool.execute({ command: 'ls', cwd: '../../../etc' }, makeToken());
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('..');
+  });
+
+  it('should reject cwd that resolves outside workspace', async () => {
+    // This triggers the resolved path check even without literal '..' segments
+    const result = await tool.execute({ command: 'ls', cwd: '../../outside' }, makeToken());
+    expect(result.success).toBe(false);
+  });
+
+  it('should allow valid cwd within workspace', async () => {
+    const mockTerminal = { sendText: vi.fn(), show: vi.fn() };
+    vi.mocked(window.createTerminal).mockReturnValueOnce(mockTerminal as any);
+
+    const result = await tool.execute({ command: 'ls', cwd: 'src' }, makeToken());
+    expect(result.success).toBe(true);
+  });
+
+  // ─── v0.10.0: command blocklist ──────────────
+
+  it('should block dangerous rm -rf / command', async () => {
+    const result = await tool.execute({ command: 'rm -rf /' }, makeToken());
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('säkerhetsskydd');
+  });
+
+  it('should block mkfs command', async () => {
+    const result = await tool.execute({ command: 'sudo mkfs.ext4 /dev/sda1' }, makeToken());
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('säkerhetsskydd');
+  });
+
+  it('should block dd command', async () => {
+    const result = await tool.execute({ command: 'dd if=/dev/zero of=/dev/sda' }, makeToken());
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('säkerhetsskydd');
+  });
+
+  it('should allow safe commands', async () => {
+    const mockTerminal = { sendText: vi.fn(), show: vi.fn() };
+    vi.mocked(window.createTerminal).mockReturnValueOnce(mockTerminal as any);
+
+    const result = await tool.execute({ command: 'npm run build' }, makeToken());
+    expect(result.success).toBe(true);
+  });
 });
 
 // --- DiagnosticsTool ---

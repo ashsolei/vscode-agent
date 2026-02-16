@@ -268,12 +268,26 @@ export class AgentMemory {
       this.persistTimer = undefined;
       if (this.dirty) {
         this.dirty = false;
-        this.persist();
+        void this.persist();
       }
     }, 5000);
   }
 
-  private persist(): void {
-    this.globalState.update(AgentMemory.STORAGE_KEY, this.memories);
+  private async persist(): Promise<void> {
+    await this.globalState.update(AgentMemory.STORAGE_KEY, this.memories);
+  }
+
+  /**
+   * Dispose — rensa timer och spara slutgiltigt.
+   */
+  dispose(): void {
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = undefined;
+    }
+    if (this.dirty) {
+      this.dirty = false;
+      void this.globalState.update(AgentMemory.STORAGE_KEY, this.memories);
+    }
   }
 }

@@ -26,6 +26,26 @@ export class TerminalTool extends BaseTool {
         return this.failure('Ingen arbetsyta öppen');
       }
 
+      // Validera cwd — avvisa path traversal
+      if (cwd) {
+        const segments = cwd.split('/');
+        if (segments.some(s => s === '..')) {
+          return this.failure(`cwd '${cwd}' innehåller otillåtna '..' segment`);
+        }
+        const resolved = vscode.Uri.joinPath(ws.uri, cwd);
+        const root = ws.uri.fsPath;
+        if (!resolved.fsPath.startsWith(root + '/') && resolved.fsPath !== root) {
+          return this.failure(`cwd '${cwd}' pekar utanför arbetsytan`);
+        }
+      }
+
+      // Blockera farliga kommandon
+      const blocked = ['rm -rf /', 'mkfs', 'dd if=', ':(){', 'fork bomb', '> /dev/sd'];
+      const cmdLower = command.toLowerCase();
+      if (blocked.some(b => cmdLower.includes(b))) {
+        return this.failure(`Kommandot blockerades av säkerhetsskydd`);
+      }
+
       // Skapa en terminal och kör kommandot
       const terminal = vscode.window.createTerminal({
         name: `Agent: ${command.slice(0, 30)}`,

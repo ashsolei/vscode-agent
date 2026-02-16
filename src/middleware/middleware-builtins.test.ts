@@ -142,6 +142,50 @@ describe('createRateLimitMiddleware', () => {
     const result = await pipeline.execute(agent, makeCtx());
     expect(result.metadata?.skippedBy).toBe('rate-limit');
   });
+
+  // ─── v0.10.0: updateLimit ─────────────────────
+
+  it('should expose updateLimit method', () => {
+    const mw = createRateLimitMiddleware(10);
+    expect(typeof mw.updateLimit).toBe('function');
+  });
+
+  it('should change effective limit via updateLimit without resetting state', async () => {
+    const mw = createRateLimitMiddleware(3);
+    const pipeline = new MiddlewarePipeline();
+    pipeline.use(mw);
+
+    const agent = makeAgent('rl', async () => ({ metadata: {} }));
+
+    // Use 2 of 3 slots
+    await pipeline.execute(agent, makeCtx());
+    await pipeline.execute(agent, makeCtx());
+
+    // Lower limit to 2 — now at capacity, next should be blocked
+    mw.updateLimit(2);
+
+    const result = await pipeline.execute(agent, makeCtx());
+    expect(result.metadata?.skippedBy).toBe('rate-limit');
+  });
+
+  it('should allow more requests when updateLimit increases limit', async () => {
+    const mw = createRateLimitMiddleware(2);
+    const pipeline = new MiddlewarePipeline();
+    pipeline.use(mw);
+
+    const agent = makeAgent('rl', async () => ({ metadata: {} }));
+
+    // Fill up the 2 slots
+    await pipeline.execute(agent, makeCtx());
+    await pipeline.execute(agent, makeCtx());
+
+    // Increase limit to 5
+    mw.updateLimit(5);
+
+    // Should be allowed now
+    const result = await pipeline.execute(agent, makeCtx());
+    expect(result.metadata?.skippedBy).toBeUndefined();
+  });
 });
 
 // --- Error isolation tests ---

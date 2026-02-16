@@ -5,6 +5,24 @@ All notable changes to the **VS Code Agent** extension will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2025-07-12
+
+### Security
+- **Critical: TerminalTool path traversal** — `TerminalTool.execute()` accepted arbitrary `cwd` without validation; now rejects `..` segments and verifies resolved path stays within workspace root; added dangerous command blocklist (`rm -rf /`, `mkfs`, `dd if=`, `:(){`, `> /dev/sd`)
+- **Critical: Executor CWD prefix attack** — `AutonomousExecutor.runCommand()` used `startsWith(root)` which allowed `/workspace-evil` to pass for root `/workspace`; now requires trailing separator (`root + '/'`) and exact-match check
+
+### Fixed
+- **AgentMemory timer leak** — no `dispose()` method existed, so the debounce timer could fire after extension deactivation; added `dispose()` that clears timer and performs final synchronous save; `persist()` now properly `await`s `globalState.update()`
+- **EventEngine addRule after activate** — `onInterval` rules added via `addRule()` after `activate()` never got interval timers; added `activated` flag checked in `addRule()` to start timers for runtime-added interval rules
+- **Rate-limit bypass via settings reload** — changing `vscodeAgent.rateLimitPerMinute` destroyed the entire middleware pipeline, resetting the timestamps array; `createRateLimitMiddleware` now returns an extended type with `updateLimit(n)` that mutates the limit without destroying state
+- **Workflow retry ignores cancellation** — retry loop in `WorkflowEngine.runStep()` didn't check `token.isCancellationRequested`; now checks at top of each retry iteration and returns a `skipped` result
+- **Plugin delete ghost agent** — `handleFileDelete()` derived plugin ID from filename instead of using the JSON `id`; added `uriToPluginId` Map populated during `loadPlugin()`, used in delete handler for correct unregistration
+- **Extension cleanup incomplete** — `memory` and `guardrails` were not disposed during extension deactivation; added `memory.dispose()` and `guardrails.dispose()` to cleanup block
+
+### Improved
+- Total tests: 827 across 40 test files (up from 805/40)
+- 22 new tests covering all v0.10.0 fixes: TerminalTool path traversal (4), command blocklist (4), Executor CWD (3), AgentMemory dispose (4), EventEngine addRule after activate (3), rate-limit updateLimit (3), workflow retry cancellation (1), PluginLoader URI mapping (1)
+
 ## [0.9.0] - 2025-07-12
 
 ### Fixed

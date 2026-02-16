@@ -181,10 +181,11 @@ export function createUsageMiddleware(
  */
 export function createRateLimitMiddleware(
   maxPerMinute = 30
-): Middleware {
+): Middleware & { updateLimit(n: number): void } {
   const timestamps: number[] = [];
+  let limit = maxPerMinute;
 
-  return {
+  const mw: Middleware & { updateLimit(n: number): void } = {
     name: 'rate-limit',
     priority: 1,
     async before(info) {
@@ -194,16 +195,20 @@ export function createRateLimitMiddleware(
         timestamps.shift();
       }
 
-      if (timestamps.length >= maxPerMinute) {
+      if (timestamps.length >= limit) {
         info.ctx.stream.markdown(
-          `⚠️ Rate limit nådd (${maxPerMinute}/min). Vänta ett ögonblick.`
+          `⚠️ Rate limit nådd (${limit}/min). Vänta ett ögonblick.`
         );
         return 'skip';
       }
 
       timestamps.push(now);
     },
+    updateLimit(n: number) {
+      limit = n;
+    },
   };
+  return mw;
 }
 
 function ts(): string {

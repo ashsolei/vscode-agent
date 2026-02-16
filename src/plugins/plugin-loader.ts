@@ -111,6 +111,8 @@ Utför uppgiften och rapportera vad du gjort.`;
 export class PluginLoader implements vscode.Disposable {
   private watchers: vscode.FileSystemWatcher[] = [];
   private loadedPlugins = new Map<string, PluginAgent>();
+  /** Map URI.fsPath → pluginId för korrekt borttagning */
+  private uriToPluginId = new Map<string, string>();
   private onPluginsChanged = new vscode.EventEmitter<PluginAgent[]>();
 
   /** Event som triggas när plugins ändras */
@@ -189,6 +191,7 @@ export class PluginLoader implements vscode.Disposable {
       }
 
       this.loadedPlugins.set(pluginId, agent);
+      this.uriToPluginId.set(uri.fsPath, pluginId);
       this.registerCallback(agent);
 
       return agent;
@@ -217,13 +220,13 @@ export class PluginLoader implements vscode.Disposable {
    * Hantera fil-borttagning.
    */
   private handleFileDelete(uri: vscode.Uri): void {
-    // Försök hitta vilken plugin som togs bort
-    const filename = uri.path.split('/').pop()?.replace('.json', '') ?? '';
-    const pluginId = `plugin-${filename}`;
+    // Använd URI-mappning för korrekt plugin-ID
+    const pluginId = this.uriToPluginId.get(uri.fsPath);
 
-    if (this.loadedPlugins.has(pluginId)) {
+    if (pluginId && this.loadedPlugins.has(pluginId)) {
       this.unregisterCallback(pluginId);
       this.loadedPlugins.delete(pluginId);
+      this.uriToPluginId.delete(uri.fsPath);
       vscode.window.showInformationMessage(
         `🔌 Plugin "${pluginId}" avregistrerades`
       );
