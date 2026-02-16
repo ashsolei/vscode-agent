@@ -63,6 +63,9 @@ import { AgentMarketplace } from './marketplace';
 import { ResponseCache } from './cache';
 import { initI18n, setLocale, Locale } from './i18n';
 import { createCaptureStream } from './utils';
+import { AgentRetryHandler } from './retry';
+import { CommandHistory } from './history';
+import { AgentHealthMonitor } from './health';
 
 /**
  * Extension entry point.
@@ -116,6 +119,42 @@ export function activate(context: vscode.ExtensionContext) {
 
   // --- 2d. Skapa dashboard ---
   const dashboard = new AgentDashboard(context.extensionUri);
+
+  // --- 2d2. Skapa agent retry handler ---
+  const retryConfig = vscode.workspace.getConfiguration('vscodeAgent.retry');
+  const retryHandler = new AgentRetryHandler({
+    maxRetries: retryConfig.get<number>('maxRetries', 2),
+    initialDelayMs: retryConfig.get<number>('initialDelayMs', 500),
+    backoffMultiplier: retryConfig.get<number>('backoffMultiplier', 2),
+    maxDelayMs: retryConfig.get<number>('maxDelayMs', 5000),
+  });
+  context.subscriptions.push(retryHandler);
+  // Integrera retry-middleware i pipelinen
+  middleware.use(retryHandler.createMiddleware());
+
+  // --- 2d3. Skapa command history ---
+  const commandHistory = new CommandHistory(context.globalState);
+  context.subscriptions.push(commandHistory);
+
+  // --- 2d4. Skapa agent health monitor ---
+  const healthConfig = vscode.workspace.getConfiguration('vscodeAgent.health');
+  const healthMonitor = new AgentHealthMonitor({
+    degradedThreshold: healthConfig.get<number>('degradedThreshold', 0.8),
+    unhealthyThreshold: healthConfig.get<number>('unhealthyThreshold', 0.5),
+    autoDisableEnabled: healthConfig.get<boolean>('autoDisableEnabled', false),
+    autoDisableAfterFailures: healthConfig.get<number>('autoDisableAfterFailures', 5),
+  });
+  context.subscriptions.push(healthMonitor);
+  // Logga hälsostatus-ändringar
+  healthMonitor.onStatusChange(({ agentId, from, to }) => {
+    outputChannel.appendLine(`[Health] Agent "${agentId}" status: ${from} → ${to}`);
+    if (to === 'unhealthy' && notificationsEnabled) {
+      notifications.notify(agentId, agentId, 'warning', `Agent "${agentId}" är ohälsosam`);
+    }
+  });
+  healthMonitor.onAgentDisabled(({ agentId, reason }) => {
+    outputChannel.appendLine(`[Health] Agent "${agentId}" disabled: ${reason}`);
+  });
 
   // --- 2e. Skapa guard rails ---
   const guardrailsConfig = vscode.workspace.getConfiguration('vscodeAgent.guardrails');
@@ -263,6 +302,11 @@ export function activate(context: vscode.ExtensionContext) {
   // Injicera DiffPreview i alla agenter (för förhandsgranskning av autonoma ändringar)
   for (const agent of registry.list()) {
     agent.setDiffPreview(diffPreview);
+  }
+
+  // Registrera alla agenter med hälsomonitorn
+  for (const agent of registry.list()) {
+    healthMonitor.registerAgent(agent);
   }
 
   // --- 3a2. Profil deep-wiring: reagera på profilbyten ---
@@ -748,6 +792,19 @@ export function activate(context: vscode.ExtensionContext) {
         });
       }
 
+      // Health monitor: rapportera framgång
+      healthMonitor.recordSuccess(agent.id, Date.now() - _startTime);
+
+      // Command history: spara kommando
+      commandHistory.record({
+        command: request.command,
+        prompt: request.prompt,
+        agentId: agent.id,
+        timestamp: Date.now(),
+        durationMs: Date.now() - _startTime,
+        success: true,
+      });
+
       // Conversation: spara faktiskt agent-svar (max 10 000 tecken)
       await conversationPersistence.addMessage({
         role: 'assistant',
@@ -820,6 +877,22 @@ export function activate(context: vscode.ExtensionContext) {
           String(error)
         );
       }
+
+      // Health monitor: rapportera fel
+      if (agent) {
+        healthMonitor.recordFailure(agent.id, Date.now() - _startTime, String(error));
+      }
+
+      // Command history: spara misslyckat kommando
+      commandHistory.record({
+        command: request.command,
+        prompt: request.prompt,
+        agentId: agent?.id ?? 'unknown',
+        timestamp: Date.now(),
+        durationMs: Date.now() - _startTime,
+        success: false,
+        error: String(error),
+      });
 
       if (error instanceof vscode.LanguageModelError) {
         stream.markdown(`⚠️ Språkmodellfel: ${error.message}`);
@@ -1290,6 +1363,53 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // --- Command History kommandon ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.showCommandHistory', () => {
+      commandHistory.showPicker();
+    })
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.showCommandStats', () => {
+      commandHistory.showStats();
+    })
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.clearCommandHistory', async () => {
+      const choice = await vscode.window.showWarningMessage(
+        'Rensa kommandohistorik? Favoriter kan behållas.',
+        'Rensa allt', 'Behåll favoriter', 'Avbryt'
+      );
+      if (choice === 'Rensa allt') {
+        commandHistory.clear();
+        vscode.window.showInformationMessage('Kommandohistorik rensad.');
+      } else if (choice === 'Behåll favoriter') {
+        commandHistory.clear(true);
+        vscode.window.showInformationMessage('Kommandohistorik rensad (favoriter behållna).');
+      }
+    })
+  );
+
+  // --- Agent Health Monitor kommandon ---
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.showAgentHealth', () => {
+      healthMonitor.showHealthReport();
+    })
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('vscode-agent.runAgentHealthCheck', () => {
+      const results = healthMonitor.runHealthCheck();
+      const alerts = results.filter(r => r.alert);
+      if (alerts.length === 0) {
+        vscode.window.showInformationMessage('✅ Alla agenter är friska.');
+      } else {
+        vscode.window.showWarningMessage(
+          `⚠️ ${alerts.length} agent(er) med problem: ${alerts.map(a => a.agentId).join(', ')}`
+        );
+      }
+    })
+  );
+
   // --- Health Check kommando ---
   context.subscriptions.push(
     vscode.commands.registerCommand('vscode-agent.healthCheck', async () => {
@@ -1347,6 +1467,9 @@ export function activate(context: vscode.ExtensionContext) {
       marketplace.dispose();
       memory.dispose();
       guardrails.dispose();
+      retryHandler.dispose();
+      commandHistory.dispose();
+      healthMonitor.dispose();
     },
   });
 

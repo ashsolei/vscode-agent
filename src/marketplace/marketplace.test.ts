@@ -16,14 +16,14 @@ function createMockMemento(): any {
 
 describe('AgentMarketplace — callback wiring', () => {
   let memento: any;
-  let installCallback: ReturnType<typeof vi.fn>;
-  let uninstallCallback: ReturnType<typeof vi.fn>;
+  let installCallback: ReturnType<typeof vi.fn<(pluginData: any) => void>>;
+  let uninstallCallback: ReturnType<typeof vi.fn<(agentId: string) => void>>;
   let marketplace: AgentMarketplace;
 
   beforeEach(() => {
     memento = createMockMemento();
-    installCallback = vi.fn();
-    uninstallCallback = vi.fn();
+    installCallback = vi.fn<(pluginData: any) => void>();
+    uninstallCallback = vi.fn<(agentId: string) => void>();
     marketplace = new AgentMarketplace(memento, installCallback, uninstallCallback);
   });
 

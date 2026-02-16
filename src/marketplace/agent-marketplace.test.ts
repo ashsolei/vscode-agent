@@ -4,8 +4,8 @@ import { AgentMarketplace, MarketplaceAgent } from './agent-marketplace';
 describe('AgentMarketplace', () => {
   let marketplace: AgentMarketplace;
   let mockState: Record<string, any>;
-  let onInstallFn: ReturnType<typeof vi.fn>;
-  let onUninstallFn: ReturnType<typeof vi.fn>;
+  let onInstallFn: ReturnType<typeof vi.fn<(pluginData: any) => void>>;
+  let onUninstallFn: ReturnType<typeof vi.fn<(agentId: string) => void>>;
 
   const createMockState = () => {
     mockState = {};
@@ -18,8 +18,8 @@ describe('AgentMarketplace', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    onInstallFn = vi.fn();
-    onUninstallFn = vi.fn();
+    onInstallFn = vi.fn<(pluginData: any) => void>();
+    onUninstallFn = vi.fn<(agentId: string) => void>();
     marketplace = new AgentMarketplace(
       createMockState() as any,
       onInstallFn,

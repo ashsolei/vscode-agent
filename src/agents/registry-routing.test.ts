@@ -7,11 +7,11 @@ import { BaseAgent, AgentContext, AgentResult } from './base-agent';
  */
 
 class TestAgent extends BaseAgent {
-  handleFn: ReturnType<typeof vi.fn>;
+  handleFn: ReturnType<typeof vi.fn<(ctx: AgentContext) => Promise<AgentResult>>>;
 
   constructor(id: string, name: string = id) {
     super(id, name, `Test agent: ${name}`);
-    this.handleFn = vi.fn().mockResolvedValue({});
+    this.handleFn = vi.fn<(ctx: AgentContext) => Promise<AgentResult>>().mockResolvedValue({});
   }
 
   async handle(ctx: AgentContext): Promise<AgentResult> {

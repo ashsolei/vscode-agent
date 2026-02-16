@@ -52,7 +52,7 @@ describe('history utils', () => {
     });
 
     it('should convert ChatRequestTurn to user message', () => {
-      const turn = new vsc.ChatRequestTurn('Hello agent');
+      const turn = new (vsc.ChatRequestTurn as any)('Hello agent');
       const context = {
         history: [turn],
       };
@@ -63,7 +63,7 @@ describe('history utils', () => {
     });
 
     it('should convert ChatResponseTurn to assistant message', () => {
-      const turn = new vsc.ChatResponseTurn('agent');
+      const turn = new (vsc.ChatResponseTurn as any)('agent');
       (turn as any).response = [{ value: { value: 'I can help' } }];
       const context = { history: [turn] };
       const messages = buildHistory(context as any);
@@ -73,11 +73,11 @@ describe('history utils', () => {
     });
 
     it('should handle mixed request and response turns', () => {
-      const responseTurn = new vsc.ChatResponseTurn('agent');
+      const responseTurn = new (vsc.ChatResponseTurn as any)('agent');
       (responseTurn as any).response = [{ value: { value: 'Answer' } }];
       const context = {
         history: [
-          new vsc.ChatRequestTurn('Question'),
+          new (vsc.ChatRequestTurn as any)('Question'),
           responseTurn,
         ],
       };
@@ -88,7 +88,7 @@ describe('history utils', () => {
     });
 
     it('should skip response turns with empty text', () => {
-      const turn = new vsc.ChatResponseTurn('agent');
+      const turn = new (vsc.ChatResponseTurn as any)('agent');
       (turn as any).response = [];
       const context = { history: [turn] };
       const messages = buildHistory(context as any);

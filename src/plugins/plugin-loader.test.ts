@@ -20,13 +20,13 @@ function encodeJson(obj: unknown): Uint8Array {
 
 describe('PluginLoader', () => {
   let loader: PluginLoader;
-  let registerCallback: ReturnType<typeof vi.fn>;
-  let unregisterCallback: ReturnType<typeof vi.fn>;
+  let registerCallback: ReturnType<typeof vi.fn<(agent: any) => void>>;
+  let unregisterCallback: ReturnType<typeof vi.fn<(agentId: string) => void>>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    registerCallback = vi.fn();
-    unregisterCallback = vi.fn();
+    registerCallback = vi.fn<(agent: any) => void>();
+    unregisterCallback = vi.fn<(agentId: string) => void>();
     loader = new PluginLoader(registerCallback, unregisterCallback);
   });
 

@@ -310,6 +310,26 @@
         "title": "Agent: Öppna Marketplace"
       },
       {
+        "command": "vscode-agent.showCommandHistory",
+        "title": "Agent: Visa kommandohistorik"
+      },
+      {
+        "command": "vscode-agent.showCommandStats",
+        "title": "Agent: Kommandostatistik"
+      },
+      {
+        "command": "vscode-agent.clearCommandHistory",
+        "title": "Agent: Rensa kommandohistorik"
+      },
+      {
+        "command": "vscode-agent.showAgentHealth",
+        "title": "Agent: Visa agenthälsa"
+      },
+      {
+        "command": "vscode-agent.runAgentHealthCheck",
+        "title": "Agent: Kör hälsokontroll"
+      },
+      {
         "command": "vscode-agent.healthCheck",
         "title": "Agent: Health Check"
       }
@@ -383,6 +403,16 @@
         "command": "vscode-agent.showMarketplace",
         "key": "ctrl+k ctrl+m",
         "mac": "cmd+k cmd+m"
+      },
+      {
+        "command": "vscode-agent.showCommandHistory",
+        "key": "ctrl+k ctrl+h",
+        "mac": "cmd+k cmd+h"
+      },
+      {
+        "command": "vscode-agent.showAgentHealth",
+        "key": "ctrl+k ctrl+y",
+        "mac": "cmd+k cmd+y"
       }
     ],
     "configuration": {

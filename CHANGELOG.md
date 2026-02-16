@@ -5,13 +5,30 @@ All notable changes to the **VS Code Agent** extension will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2025-07-13
+
+### Added
+
+- **Agent Retry & Fallback** (`src/retry/`) — Automatic retry with exponential backoff when agents fail; configurable via `vscodeAgent.retry.*` settings (maxRetries, initialDelayMs, backoffMultiplier, maxDelayMs); fallback to alternative agents when primary fails; integrates as middleware (priority 200) in the pipeline; retry events, stats, and history tracking
+- **Command History & Replay** (`src/history/`) — Persistent command history stored in globalState; search, filter, tag, and favorite past commands; replay commands from picker UI; statistics dashboard showing usage patterns; commands: `Agent: Visa kommandohistorik` (Cmd+K Cmd+H), `Agent: Kommandostatistik`, `Agent: Rensa kommandohistorik`; max 1000 entries with smart trimming (preserves favorites)
+- **Agent Health Monitor** (`src/health/`) — Real-time health monitoring for all agents tracking success rate, response times (avg + P95), and consecutive failures; health statuses: healthy/degraded/unhealthy/disabled/unknown; configurable thresholds via `vscodeAgent.health.*`; optional auto-disable for repeatedly failing agents; markdown health report with `Agent: Visa agenthälsa` (Cmd+K Cmd+Y); `Agent: Kör hälsokontroll` command; status change events logged to output channel
+
+### Improved
+
+- Total tests: 1068 across 43 test files (up from 954/40)
+- Agent retry handler: 26 tests covering retries, fallback, timeout, stats, events
+- Command history: 30+ tests covering CRUD, search filters, favorites, tags, stats, trimming, UI pickers
+- Agent health monitor: 35+ tests covering registration, recording, status calculation, pause/resume, auto-disable, health checks, reports
+
 ## [0.10.0] - 2025-07-12
 
 ### Security
+
 - **Critical: TerminalTool path traversal** — `TerminalTool.execute()` accepted arbitrary `cwd` without validation; now rejects `..` segments and verifies resolved path stays within workspace root; added dangerous command blocklist (`rm -rf /`, `mkfs`, `dd if=`, `:(){`, `> /dev/sd`)
 - **Critical: Executor CWD prefix attack** — `AutonomousExecutor.runCommand()` used `startsWith(root)` which allowed `/workspace-evil` to pass for root `/workspace`; now requires trailing separator (`root + '/'`) and exact-match check
 
 ### Fixed
+
 - **AgentMemory timer leak** — no `dispose()` method existed, so the debounce timer could fire after extension deactivation; added `dispose()` that clears timer and performs final synchronous save; `persist()` now properly `await`s `globalState.update()`
 - **EventEngine addRule after activate** — `onInterval` rules added via `addRule()` after `activate()` never got interval timers; added `activated` flag checked in `addRule()` to start timers for runtime-added interval rules
 - **Rate-limit bypass via settings reload** — changing `vscodeAgent.rateLimitPerMinute` destroyed the entire middleware pipeline, resetting the timestamps array; `createRateLimitMiddleware` now returns an extended type with `updateLimit(n)` that mutates the limit without destroying state
@@ -20,27 +37,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Extension cleanup incomplete** — `memory` and `guardrails` were not disposed during extension deactivation; added `memory.dispose()` and `guardrails.dispose()` to cleanup block
 
 ### Improved
+
 - Total tests: 827 across 40 test files (up from 805/40)
 - 22 new tests covering all v0.10.0 fixes: TerminalTool path traversal (4), command blocklist (4), Executor CWD (3), AgentMemory dispose (4), EventEngine addRule after activate (3), rate-limit updateLimit (3), workflow retry cancellation (1), PluginLoader URI mapping (1)
 
 ## [0.9.0] - 2025-07-12
 
 ### Fixed
+
 - **Critical: GuardRails checkpoint always empty** — `createCheckpoint()` was called with `[]` for filePaths making rollback a no-op; now stores the checkpoint reference and populates it post-execution via `guardrails.markCreated()` using `result.metadata.filesAffected`
 - **Cache key cross-agent poisoning** — `ResponseCache.makeKey()` was called without agent identifier; now passes `agent.id` as third parameter, scoping cached responses per-agent
 - **`dryRun()` silent no-op** — `GuardRails` was constructed without a stream, so `dryRun()` always early-returned; method now accepts optional `targetStream` parameter that callers pass from the handler
 - **Telemetry included dialog wait time** — `_startTime = Date.now()` was measured before the modal confirmation dialog; moved to after the dialog so telemetry only measures actual agent execution
 
 ### Added
+
 - **`createCaptureStream()` utility** — new streaming utility in `src/utils/streaming.ts` returning `[proxyStream, getCapturedText]` tuple; replaces inline 15-line Proxy pattern in extension.ts
 - **12 new tests** — `createCaptureStream` (4), `dryRun` with `targetStream` (3), `markCreated` (2), cache key with agent differentiation (2), dryRun no-op safety (1)
 
 ### Changed
+
 - **Memory save gating** — agent responses are no longer unconditionally saved; memory now skips when `result.metadata.remember === false` or response text is shorter than 100 characters
 - `GuardRails.dryRun()` signature expanded: `dryRun(operations, targetStream?)` — prefers `targetStream`, falls back to constructor stream
 - Inline stream capture Proxy in `extension.ts` replaced with shared `createCaptureStream()` from utils
 
 ### Improved
+
 - Total tests: 805 across 40 test files (up from 793/40)
 - Cache isolation prevents cross-agent cache hits
 - Checkpoint system now records affected files for meaningful rollback
@@ -49,11 +71,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.8.0] - 2025-07-12
 
 ### Fixed
+
 - **Critical: `eventEngine` forward reference** — `configManager.onDidChange` callback referenced `eventEngine` before its `const` declaration; hoisted to `let` with runtime guard `if (config.eventRules && eventEngine)` to eliminate temporal dead zone risk
 - **`guardrails.dryRunDefault` no-op** — config handler only logged the dry-run setting without applying it; now correctly assigns `guardrailsDryRun = config.guardrails.dryRunDefault`
 - **Profile middleware wiring was log-only** — profile activation/deactivation now actually rebuilds the `MiddlewarePipeline`: clears existing middlewares, re-adds rate limiter, and adds profile-specified middlewares (timing/usage/logging); deactivation restores default pipeline
 
 ### Added
+
 - **`TerminalTool`** — new tool (`id: 'terminal'`) enabling agents to run shell commands via `vscode.window.createTerminal()`; accepts `command` (required) and `cwd` (optional) parameters
 - **`DiagnosticsTool`** — new tool (`id: 'diagnostics'`) for querying workspace diagnostics via `vscode.languages.getDiagnostics()`; supports `list` (with severity/file filtering, capped at 50), `count` (errors/warnings/info/hints), and `summary` (top 20 files by error count) actions
 - **`createFiles()` atomic rollback** — on partial failure, already-created files are deleted (best-effort), remaining files are marked as skipped ("Överhoppad (rollback)"); rollback skipped when DiffPreview is active
@@ -62,10 +86,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **18 new unit tests** — TerminalTool (4), DiagnosticsTool (6), createFiles rollback (3), ExternalIntegrations reload (5)
 
 ### Changed
+
 - `ToolRegistry.createDefault()` registers 4 tools (was 2): FileTool, SearchTool, TerminalTool, DiagnosticsTool
 - `eventEngine` declaration changed from `const` to `let` with forward declaration before config callback
 
 ### Improved
+
 - Total tests: 793 across 40 test files (up from 775/40)
 - Agent tool ecosystem expanded — agents can now run commands and query diagnostics
 - Config changes to external integrations take effect immediately via `configManager.onDidChange`
@@ -74,6 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.7.0] - 2025-07-12
 
 ### Added
+
 - **Plugin DiffPreview injection** — dynamically loaded plugin agents now receive `DiffPreview` via `setDiffPreview()` in the plugin loader callback, fixing a bug where plugin agents bypassed interactive diff review
 - **Profile deep wiring** — `profileManager.onDidChange` subscription wires `guardLevel` → guardrails (strict = always enabled, relaxed = disabled, normal = settings default), `models` → `ModelSelector.updateConfig()`, `middleware` → output channel logging; deactivation resets all to VS Code settings defaults
 - **Dynamic Plugins tree category** — `AgentTreeProvider.getChildren()` now detects agents not in any hardcoded category and groups them into a dynamic "Plugins" category with a plug icon; category only appears when uncategorized agents exist
@@ -83,11 +110,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **20 new unit tests** — maxSteps enforcement (8), dynamic Plugins category (5), middleware `clear()` (2), profile wiring with guardLevel/models/middleware/deactivation (5)
 
 ### Changed
+
 - `AutonomousExecutor` constructor accepts optional `maxSteps` parameter (reads from config if omitted)
 - 7 settings variables in `extension.ts` changed from `const` to `let` to support live settings reload and profile wiring
 - `MiddlewarePipeline` exposes `clear()` for pipeline teardown and rebuild
 
 ### Improved
+
 - Total tests: 775 across 40 test files (up from 757/40)
 - Plugin agents have full feature parity with builtin agents (DiffPreview injection)
 - Profile activation now has real side effects beyond agent filtering
@@ -97,18 +126,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.6.0] - 2025-07-11
 
 ### Added
+
 - **DiffPreview → AutonomousExecutor wiring** — all 15 autonomous agents and plugin-loaded agents now route file changes through `DiffPreview` when available; `createFile()`, `editFile()`, and `deleteFile()` collect diffs for interactive preview instead of writing directly; handler shows diff review UI after autonomous execution and logs applied/rejected counts
 - **Custom Workflows from `.agentrc.json`** — `WorkflowEngine` gains custom workflow CRUD (`registerWorkflow`, `getWorkflow`, `listWorkflows`, `removeWorkflow`, `clearWorkflows`); workflows defined in `.agentrc.json` `workflows` key are auto-registered at startup and on config changes; new `/workflow-run` slash command to list and execute named workflows
 - **NotificationCenter deep integration** — `EventDrivenEngine` gains `onDidTrigger` event emitter; event-triggered agent runs now route through `NotificationCenter`; guardrails checkpoint creation generates info notifications; autonomous agent execution wrapped in `withProgress()` for real-time progress toasts
 - **17 new unit tests** — DiffPreview↔Executor integration (11 tests), custom workflow CRUD (8 tests), EventDrivenEngine `onDidTrigger` (2 tests)
 
 ### Changed
+
 - `AutonomousExecutor` constructor now accepts optional `DiffPreview` as second parameter
 - `BaseAgent` gains 5th injection slot: `_diffPreview` with `setDiffPreview()` and protected accessor
 - `EventDrivenEngine` properly disposes `_onDidTrigger` emitter
 - Handler wraps autonomous agent execution in `notifications.withProgress()` when notifications are enabled
 
 ### Improved
+
 - Total tests: 757 across 40 test files (up from 740/40)
 - All autonomous agents now provide interactive file change review before applying
 - Event-driven agent triggers visible to users via notification center
@@ -117,6 +149,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.0] - 2025-07-10
 
 ### Added
+
 - **ModelSelector → BaseAgent wiring** — per-agent and per-category model routing now live; `BaseAgent` gains `resolveModel()` and `getModelOptions()` helpers; `chat()` and `chatRaw()` automatically use the best model based on agent category (basic, analysis, architecture, autonomous, etc.) and `.agentrc.json` config
 - **ToolRegistry injection** — all agents can now access tools via `this.toolRegistry` and execute them with `this.executeTool(name, args)`; injection loop in `extension.ts` wires `setTools()` on all agents including dynamically loaded plugins
 - **ConfigManager full `.agentrc.json` wiring** — all 6 config keys are now consumed at runtime:
@@ -131,6 +164,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **25 new unit tests** — ModelSelector/ToolRegistry injection (11 tests), ConfigManager wiring (9 tests), reviewChain collaboration (5 tests)
 
 ### Changed
+
 - `BaseAgent` has new `_modelSelector` field with `setModelSelector()`, protected `modelSelector` accessor, `resolveModel()`, and `getModelOptions()` helper methods
 - `BaseAgent` has new `_toolRegistry` field with `setTools()`, protected `toolRegistry` accessor, and `executeTool()` convenience method
 - `chat()` and `chatRaw()` now use `resolveModel()` + `getModelOptions()` instead of `ctx.request.model` directly
@@ -138,6 +172,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Handler checks `configManager.isDisabled()` before routing to an agent and injects custom prompts from config
 
 ### Improved
+
 - Total tests: 740 across 40 test files (up from 715/37)
 - All major subsystems (ModelSelector, ToolRegistry, ConfigManager, Collaboration) now fully wired end-to-end
 - Config-driven agent management is now runtime-reactive (live reload via FileSystemWatcher)
@@ -145,6 +180,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.0] - 2025-07-09
 
 ### Added
+
 - **AgentMemory injection** — memory system now wired into all agents via `setMemory()` on `BaseAgent`; agents can access `this.memory` for remember/recall; handler automatically saves response summaries and injects memory context into prompts
 - **Marketplace → PluginLoader wiring** — install/uninstall callbacks now functional; marketplace file writes trigger `PluginLoader` file watcher for auto-registration; uninstall calls `registry.unregister()` + tree refresh
 - **Snippet auto-save fix** — "Save as snippet" button now passes agent response text; handler uses agent content instead of editor text when available
@@ -152,18 +188,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **17 new unit tests** — BaseAgent memory injection (6 tests), EventEngine default rules (5 tests), Marketplace callback wiring (6 tests)
 
 ### Changed
+
 - `BaseAgent` has new `_memory` field with `setMemory()` and protected `memory` accessor
 - Handler context injection now includes memory context alongside workspace and conversation context
 - Handler saves agent responses to memory with `type: 'context'` for future retrieval
 - Snippet command handler signature expanded to `(agentId?, prompt?, agentContent?)`
 
 ### Improved
+
 - Total tests: 715 across 37 test files (up from 698/34)
 - Four previously inert subsystems now fully functional
 
 ## [0.3.0] - 2025-07-09
 
 ### Added
+
 - **Profile-based agent routing** — active profile now filters available agents in `smartRoute()` and `resolve()`, making profiles affect actual behavior
 - **Telemetry-enhanced routing** — `smartRoute()` includes agent success rates and response times as hints for the LLM router, preferring reliable agents
 - **Full conversation persistence** — agent responses are now saved in full (up to 10k chars) instead of stubs, enabling meaningful conversation replay
@@ -172,18 +211,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **18 new unit tests** — profile routing (11 tests), conversation context builder (7 tests)
 
 ### Changed
+
 - `AgentRegistry.resolve()` accepts optional `profileAgents` parameter for profile-aware routing
 - `AgentRegistry.smartRoute()` accepts options object with `profileAgents` and `telemetryStats`
 - Handler in `extension.ts` now passes active profile agents and telemetry stats to routing
 - Workspace context now includes both git/diagnostics context and conversation history
 
 ### Improved
+
 - Total tests: 698 across 34 test files (up from 680/32)
 - Overall test coverage: 44.85% (up from 44.22%)
 
 ## [0.2.0] - 2025-07-09
 
 ### Added
+
 - **111 new unit tests** — total now 680 across 32 test files
 - Test coverage for statusbar module (100%)
 - Test coverage for marketplace module (33 tests)
@@ -194,17 +236,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Utils barrel export (`src/utils/index.ts`)
 
 ### Fixed
+
 - VS Code mock: added `CodeLens`, `ThemeColor`, `TreeItem`, `TreeItemCollapsibleState`, `ChatRequestTurn` classes
 - Test files using `require('vscode')` replaced with proper ESM imports
 - Case-sensitive assertion in system prompts test
 
 ### Improved
+
 - Overall test coverage from 38.71% to 44.22%
 - Five previously untested modules now have comprehensive test suites
 
 ## [0.1.0] - 2025-02-10
 
 ### Added
+
 - **30+ specialized agents** for code, docs, testing, security, performance, architecture, and more
 - **Autonomous agents** (scaffold, autofix, devops, database, migrate, component, fullstack)
 - **Smart auto-router** using LLM to route prompts to the best agent automatically
@@ -241,6 +286,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CI/CD pipeline** with GitHub Actions
 
 ### Infrastructure
+
 - TypeScript 5.3+ with strict mode
 - VS Code engine ^1.93.0 (Chat Participant API)
 - Vitest for unit testing with V8 coverage
