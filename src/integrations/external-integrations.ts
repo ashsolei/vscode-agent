@@ -47,6 +47,43 @@ export class ExternalIntegrations implements vscode.Disposable {
     };
   }
 
+  /**
+   * Ladda om konfiguration från .agentrc.json integrations-objekt.
+   * Tokens behålls från env-vars om de inte anges explicit.
+   */
+  reload(integrations?: Partial<IntegrationConfig>): void {
+    // Börja med env-vars (baseline)
+    this.loadConfig();
+
+    // Overlay .agentrc.json-värden (ej tokens — bara repo, channel, project etc.)
+    if (integrations) {
+      if (integrations.github) {
+        this.config.github = {
+          ...this.config.github,
+          repo: integrations.github.repo ?? this.config.github?.repo,
+          // Token behålls från env var om inte explicit satt
+          token: integrations.github.token ?? this.config.github?.token,
+        };
+      }
+      if (integrations.slack) {
+        this.config.slack = {
+          ...this.config.slack,
+          channel: integrations.slack.channel ?? this.config.slack?.channel,
+          webhookUrl: integrations.slack.webhookUrl ?? this.config.slack?.webhookUrl,
+        };
+      }
+      if (integrations.jira) {
+        this.config.jira = {
+          ...this.config.jira,
+          baseUrl: integrations.jira.baseUrl ?? this.config.jira?.baseUrl,
+          project: integrations.jira.project ?? this.config.jira?.project,
+          email: integrations.jira.email ?? this.config.jira?.email,
+          token: integrations.jira.token ?? this.config.jira?.token,
+        };
+      }
+    }
+  }
+
   /* ─── GitHub ─── */
 
   /** Skapa en GitHub issue */

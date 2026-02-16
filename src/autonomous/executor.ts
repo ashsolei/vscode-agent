@@ -274,12 +274,40 @@ export class AutonomousExecutor {
 
   /**
    * Skapa flera filer på en gång (scaffolding).
+   * Om en fil misslyckas rullas alla redan skapade filer tillbaka.
    */
   async createFiles(files: Array<{ path: string; content: string }>): Promise<ActionResult[]> {
     const results: ActionResult[] = [];
+    const createdPaths: string[] = [];
+
     for (const file of files) {
-      results.push(await this.createFile(file.path, file.content));
+      const result = await this.createFile(file.path, file.content);
+      results.push(result);
+
+      if (result.success) {
+        createdPaths.push(file.path);
+      } else {
+        // Rulla tillbaka alla redan skapade filer
+        if (createdPaths.length > 0 && !this.diffPreview) {
+          const ws = vscode.workspace.workspaceFolders?.[0];
+          if (ws) {
+            for (const created of createdPaths) {
+              try {
+                const uri = this.validatePath(created, ws);
+                await vscode.workspace.fs.delete(uri);
+              } catch { /* best-effort rollback */ }
+            }
+            this.stream.progress(`⚠️ Rollback: tog bort ${createdPaths.length} filer efter fel i ${file.path}`);
+          }
+        }
+        // Markera kvarvarande filer som överhoppade
+        for (let i = results.length; i < files.length; i++) {
+          results.push(this.record('createFile', false, `Överhoppad (rollback): ${files[i].path}`));
+        }
+        break;
+      }
     }
+
     return results;
   }
 

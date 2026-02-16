@@ -1,11 +1,15 @@
 import { ITool, ToolResult } from './base-tool';
 import { FileTool } from './file-tool';
 import { SearchTool } from './search-tool';
+import { TerminalTool } from './terminal-tool';
+import { DiagnosticsTool } from './diagnostics-tool';
 import * as vscode from 'vscode';
 
 export { BaseTool, type ITool, type ToolResult } from './base-tool';
 export { FileTool } from './file-tool';
 export { SearchTool } from './search-tool';
+export { TerminalTool } from './terminal-tool';
+export { DiagnosticsTool } from './diagnostics-tool';
 
 /**
  * ToolRegistry — centralt register för alla verktyg.
@@ -44,6 +48,8 @@ export class ToolRegistry {
     const registry = new ToolRegistry();
     registry.register(new FileTool());
     registry.register(new SearchTool());
+    registry.register(new TerminalTool());
+    registry.register(new DiagnosticsTool());
     return registry;
   }
 }

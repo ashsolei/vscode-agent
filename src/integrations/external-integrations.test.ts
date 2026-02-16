@@ -464,4 +464,58 @@ describe('ExternalIntegrations', () => {
       expect(integrations.listAvailable()).toEqual([]);
     });
   });
+
+  // ─── reload ───
+
+  describe('reload', () => {
+    it('bör uppdatera GitHub-repo från agentrc-config', () => {
+      setEnv({ GITHUB_TOKEN: 'ghp_test' });
+      integrations = new ExternalIntegrations();
+
+      integrations.reload({
+        github: { repo: 'orgname/newrepo' },
+      });
+
+      const available = integrations.listAvailable();
+      expect(available).toContain('github');
+    });
+
+    it('bör bevara env-tokens vid reload utan explicit token', () => {
+      setEnv({ GITHUB_TOKEN: 'ghp_keep_me', GITHUB_REPO: 'user/old' });
+      integrations = new ExternalIntegrations();
+
+      integrations.reload({
+        github: { repo: 'user/new' },
+      });
+
+      // Token should still exist
+      const available = integrations.listAvailable();
+      expect(available).toContain('github');
+    });
+
+    it('bör ladda om Jira-konfiguration', () => {
+      setEnv({ JIRA_TOKEN: 'tok', JIRA_EMAIL: 'a@b.com', JIRA_BASE_URL: 'https://jira.example.com' });
+      integrations = new ExternalIntegrations();
+
+      integrations.reload({
+        jira: { project: 'NEWPROJECT' },
+      });
+
+      const available = integrations.listAvailable();
+      expect(available).toContain('jira');
+    });
+
+    it('bör hantera reload utan argument (re-laddar env)', () => {
+      setEnv({ SLACK_WEBHOOK_URL: 'https://hooks.slack.com/test' });
+      integrations = new ExternalIntegrations();
+
+      expect(() => integrations.reload()).not.toThrow();
+      expect(integrations.listAvailable()).toContain('slack');
+    });
+
+    it('bör hantera reload med tom config', () => {
+      integrations = new ExternalIntegrations();
+      expect(() => integrations.reload({})).not.toThrow();
+    });
+  });
 });

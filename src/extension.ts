@@ -289,9 +289,22 @@ export function activate(context: vscode.ExtensionContext) {
         modelSelector.updateConfig(modelConfig);
       }
 
-      // Wire middleware → MiddlewarePipeline (logga för nu)
+      // Wire middleware → MiddlewarePipeline
       if (profile.middleware && profile.middleware.length > 0) {
-        outputChannel.appendLine(`[Profile] Middleware: ${profile.middleware.join(', ')}`);
+        middleware.clear();
+        middleware.use(createRateLimitMiddleware(rateLimitPerMin));
+        for (const mwName of profile.middleware) {
+          if (mwName === 'timing') {
+            middleware.use(createTimingMiddleware(outputChannel));
+          } else if (mwName === 'usage') {
+            middleware.use(createUsageMiddleware(context.globalState));
+          } else if (mwName === 'logging') {
+            middleware.use(createTimingMiddleware(outputChannel));
+          } else {
+            outputChannel.appendLine(`[Profile] Okänd middleware: ${mwName}`);
+          }
+        }
+        outputChannel.appendLine(`[Profile] Middleware pipeline ombyggd: ${profile.middleware.join(', ')}`);
       }
 
       outputChannel.appendLine(`[Profile] Aktiverad: ${profile.icon} ${profile.name} (guard: ${profile.guardLevel ?? 'normal'})`);
@@ -300,6 +313,13 @@ export function activate(context: vscode.ExtensionContext) {
       const cfg = vscode.workspace.getConfiguration('vscodeAgent.guardrails');
       guardrailsEnabled = cfg.get<boolean>('enabled', true);
       guardrailsDryRun = cfg.get<boolean>('dryRun', false);
+
+      // Återställ middleware-pipeline till standard
+      middleware.clear();
+      middleware.use(createRateLimitMiddleware(rateLimitPerMin));
+      middleware.use(createTimingMiddleware(outputChannel));
+      middleware.use(createUsageMiddleware(context.globalState));
+
       outputChannel.appendLine('[Profile] Avaktiverad — standardinställningar återställda');
     }
   });
@@ -309,6 +329,10 @@ export function activate(context: vscode.ExtensionContext) {
 
   // --- 3c. Skapa collaboration ---
   const collaboration = new AgentCollaboration(registry);
+
+  // Forward-declare eventEngine (initieras i sektion 5d, men refereras i configManager callback)
+  // eslint-disable-next-line prefer-const
+  let eventEngine: EventDrivenEngine | undefined;
 
   // --- 3d. Koppla .agentrc.json-inställningar till subsystem ---
   configManager.onDidChange((config) => {
@@ -320,8 +344,7 @@ export function activate(context: vscode.ExtensionContext) {
     // Uppdatera guardrails-inställningar
     if (config.guardrails) {
       if (config.guardrails.dryRunDefault !== undefined) {
-        // Flaggan används i handler-loopen ovan via guardrailsDryRun
-        // men vi kan inte mutera const — logga istället
+        guardrailsDryRun = config.guardrails.dryRunDefault;
         outputChannel.appendLine(`[Config] guardrails.dryRunDefault = ${config.guardrails.dryRunDefault}`);
       }
     }
@@ -337,7 +360,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     // Registrera custom event-regler
-    if (config.eventRules) {
+    if (config.eventRules && eventEngine) {
       for (const rule of config.eventRules) {
         eventEngine.addRule({
           id: `config-${rule.agentId}-${rule.event}`,
@@ -366,6 +389,12 @@ export function activate(context: vscode.ExtensionContext) {
         });
       }
       outputChannel.appendLine(`[Config] Registrerade ${Object.keys(config.workflows).length} custom workflows`);
+    }
+
+    // Ladda om integrations-konfiguration
+    if ((config as any).integrations) {
+      integrations.reload((config as any).integrations);
+      outputChannel.appendLine('[Config] External integrations omladdade');
     }
 
     outputChannel.appendLine(`[Config] .agentrc.json uppdaterad: ${JSON.stringify(Object.keys(config))}`);
@@ -851,7 +880,7 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   // --- 5d. Starta event-driven engine ---
-  const eventEngine = new EventDrivenEngine(registry, context.globalState);
+  eventEngine = new EventDrivenEngine(registry, context.globalState);
 
   // Registrera fördefinierade regler (disabled by default — aktiveras via settings)
   const eventConfig = vscode.workspace.getConfiguration('vscodeAgent.events');

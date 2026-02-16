@@ -5,6 +5,31 @@ All notable changes to the **VS Code Agent** extension will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2025-07-12
+
+### Fixed
+- **Critical: `eventEngine` forward reference** — `configManager.onDidChange` callback referenced `eventEngine` before its `const` declaration; hoisted to `let` with runtime guard `if (config.eventRules && eventEngine)` to eliminate temporal dead zone risk
+- **`guardrails.dryRunDefault` no-op** — config handler only logged the dry-run setting without applying it; now correctly assigns `guardrailsDryRun = config.guardrails.dryRunDefault`
+- **Profile middleware wiring was log-only** — profile activation/deactivation now actually rebuilds the `MiddlewarePipeline`: clears existing middlewares, re-adds rate limiter, and adds profile-specified middlewares (timing/usage/logging); deactivation restores default pipeline
+
+### Added
+- **`TerminalTool`** — new tool (`id: 'terminal'`) enabling agents to run shell commands via `vscode.window.createTerminal()`; accepts `command` (required) and `cwd` (optional) parameters
+- **`DiagnosticsTool`** — new tool (`id: 'diagnostics'`) for querying workspace diagnostics via `vscode.languages.getDiagnostics()`; supports `list` (with severity/file filtering, capped at 50), `count` (errors/warnings/info/hints), and `summary` (top 20 files by error count) actions
+- **`createFiles()` atomic rollback** — on partial failure, already-created files are deleted (best-effort), remaining files are marked as skipped ("Överhoppad (rollback)"); rollback skipped when DiffPreview is active
+- **`ExternalIntegrations.reload()`** — new method for live config updates from `.agentrc.json`; layers explicit config values on top of environment variable defaults; wired into `configManager.onDidChange` callback
+- **`window.createTerminal` mock** — VS Code mock expanded to support terminal creation in unit tests
+- **18 new unit tests** — TerminalTool (4), DiagnosticsTool (6), createFiles rollback (3), ExternalIntegrations reload (5)
+
+### Changed
+- `ToolRegistry.createDefault()` registers 4 tools (was 2): FileTool, SearchTool, TerminalTool, DiagnosticsTool
+- `eventEngine` declaration changed from `const` to `let` with forward declaration before config callback
+
+### Improved
+- Total tests: 793 across 40 test files (up from 775/40)
+- Agent tool ecosystem expanded — agents can now run commands and query diagnostics
+- Config changes to external integrations take effect immediately via `configManager.onDidChange`
+- File creation operations are safer with automatic rollback on partial failure
+
 ## [0.7.0] - 2025-07-12
 
 ### Added

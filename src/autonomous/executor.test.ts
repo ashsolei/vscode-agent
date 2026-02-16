@@ -452,4 +452,60 @@ describe('AutonomousExecutor', () => {
       expect(limitedExecutor.steps).toBe(1);
     });
   });
+
+  // --- createFiles rollback ---
+
+  describe('createFiles rollback', () => {
+    it('should create all files when no errors occur', async () => {
+      const files = [
+        { path: 'src/a.ts', content: 'a' },
+        { path: 'src/b.ts', content: 'b' },
+      ];
+
+      const results = await executor.createFiles(files);
+      expect(results).toHaveLength(2);
+      expect(results.every(r => r.success)).toBe(true);
+    });
+
+    it('should rollback created files when a file fails', async () => {
+      // Första filen lyckas, andra misslyckas
+      const writeFile = vi.mocked(workspace.fs.writeFile);
+      writeFile.mockResolvedValueOnce(undefined); // a.ts ok
+      writeFile.mockRejectedValueOnce(new Error('disk full')); // b.ts fails
+
+      const deleteFile = vi.mocked(workspace.fs.delete);
+      deleteFile.mockResolvedValueOnce(undefined); // rollback a.ts
+
+      const files = [
+        { path: 'src/a.ts', content: 'a' },
+        { path: 'src/b.ts', content: 'b' },
+        { path: 'src/c.ts', content: 'c' },
+      ];
+
+      const results = await executor.createFiles(files);
+      // b.ts failed, c.ts skipped
+      expect(results).toHaveLength(3);
+      expect(results[0].success).toBe(true);
+      expect(results[1].success).toBe(false);
+      expect(results[2].success).toBe(false);
+      expect(results[2].detail).toContain('Överhoppad');
+    });
+
+    it('should mark remaining files as skipped', async () => {
+      const writeFile = vi.mocked(workspace.fs.writeFile);
+      writeFile.mockRejectedValueOnce(new Error('fail first'));
+
+      const files = [
+        { path: 'src/a.ts', content: 'a' },
+        { path: 'src/b.ts', content: 'b' },
+        { path: 'src/c.ts', content: 'c' },
+      ];
+
+      const results = await executor.createFiles(files);
+      expect(results).toHaveLength(3);
+      expect(results[0].success).toBe(false);
+      expect(results[1].detail).toContain('Överhoppad');
+      expect(results[2].detail).toContain('Överhoppad');
+    });
+  });
 });
