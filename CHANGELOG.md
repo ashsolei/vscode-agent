@@ -5,6 +5,29 @@ All notable changes to the **VS Code Agent** extension will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2025-07-12
+
+### Fixed
+- **Critical: GuardRails checkpoint always empty** — `createCheckpoint()` was called with `[]` for filePaths making rollback a no-op; now stores the checkpoint reference and populates it post-execution via `guardrails.markCreated()` using `result.metadata.filesAffected`
+- **Cache key cross-agent poisoning** — `ResponseCache.makeKey()` was called without agent identifier; now passes `agent.id` as third parameter, scoping cached responses per-agent
+- **`dryRun()` silent no-op** — `GuardRails` was constructed without a stream, so `dryRun()` always early-returned; method now accepts optional `targetStream` parameter that callers pass from the handler
+- **Telemetry included dialog wait time** — `_startTime = Date.now()` was measured before the modal confirmation dialog; moved to after the dialog so telemetry only measures actual agent execution
+
+### Added
+- **`createCaptureStream()` utility** — new streaming utility in `src/utils/streaming.ts` returning `[proxyStream, getCapturedText]` tuple; replaces inline 15-line Proxy pattern in extension.ts
+- **12 new tests** — `createCaptureStream` (4), `dryRun` with `targetStream` (3), `markCreated` (2), cache key with agent differentiation (2), dryRun no-op safety (1)
+
+### Changed
+- **Memory save gating** — agent responses are no longer unconditionally saved; memory now skips when `result.metadata.remember === false` or response text is shorter than 100 characters
+- `GuardRails.dryRun()` signature expanded: `dryRun(operations, targetStream?)` — prefers `targetStream`, falls back to constructor stream
+- Inline stream capture Proxy in `extension.ts` replaced with shared `createCaptureStream()` from utils
+
+### Improved
+- Total tests: 805 across 40 test files (up from 793/40)
+- Cache isolation prevents cross-agent cache hits
+- Checkpoint system now records affected files for meaningful rollback
+- Telemetry accuracy improved — excludes user interaction wait time
+
 ## [0.8.0] - 2025-07-12
 
 ### Fixed

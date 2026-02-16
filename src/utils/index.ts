@@ -1,2 +1,2 @@
 export { extractTurnText, buildHistory } from './history';
-export { streamResponse, sendChatRequest } from './streaming';
+export { streamResponse, sendChatRequest, createCaptureStream } from './streaming';

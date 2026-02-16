@@ -27,6 +27,32 @@ export async function streamResponse(
 /**
  * Skicka en begäran till språkmodellen med system-prompt och användarmeddelande.
  */
+/**
+ * Skapa en Proxy-stream som fångar all markdown-text.
+ * Returnerar [captureStream, getCapturedText].
+ */
+export function createCaptureStream(
+  stream: vscode.ChatResponseStream
+): [vscode.ChatResponseStream, () => string] {
+  let captured = '';
+  const proxy = new Proxy(stream, {
+    get(target, prop) {
+      if (prop === 'markdown') {
+        return (value: string | vscode.MarkdownString) => {
+          const text = typeof value === 'string' ? value : value.value;
+          captured += text;
+          target.markdown(value);
+        };
+      }
+      return Reflect.get(target, prop);
+    },
+  });
+  return [proxy, () => captured];
+}
+
+/**
+ * Skicka en begäran till språkmodellen med system-prompt och användarmeddelande.
+ */
 export async function sendChatRequest(
   model: vscode.LanguageModelChat,
   systemPrompt: string,

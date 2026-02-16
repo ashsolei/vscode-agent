@@ -196,25 +196,29 @@ export class GuardRails {
 
   /**
    * Visa vad en operation SKULLE göra, utan att utföra den.
+   * @param operations Lista med planerade åtgärder.
+   * @param targetStream Om angiven, skrivs output dit istället för constructor-streamen.
    */
   dryRun(
     operations: Array<{
       action: 'create' | 'edit' | 'delete' | 'run';
       target: string;
       detail?: string;
-    }>
+    }>,
+    targetStream?: vscode.ChatResponseStream
   ): void {
-    if (!this.stream) { return; }
+    const out = targetStream ?? this.stream;
+    if (!out) { return; }
 
     const icons = { create: '📄', edit: '✏️', delete: '🗑️', run: '🖥️' };
 
-    this.stream.markdown('\n### 🔍 Dry Run — planerade åtgärder\n\n');
+    out.markdown('\n### 🔍 Dry Run — planerade åtgärder\n\n');
     for (const op of operations) {
-      this.stream.markdown(
+      out.markdown(
         `${icons[op.action]} **${op.action}** \`${op.target}\`${op.detail ? ` — ${op.detail}` : ''}\n`
       );
     }
-    this.stream.markdown('\n*Inga ändringar utfördes.*\n');
+    out.markdown('\n*Inga ändringar utfördes.*\n');
   }
 
   // ─────────────────────────────────────────────────────

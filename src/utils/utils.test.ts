@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { extractTurnText, buildHistory } from './history';
-import { streamResponse, sendChatRequest } from './streaming';
+import { streamResponse, sendChatRequest, createCaptureStream } from './streaming';
 import { ChatResponseTurn, LanguageModelChatMessage } from 'vscode';
 
 describe('history utils', () => {
@@ -116,6 +116,43 @@ describe('streaming utils', () => {
 
       const result = await streamResponse(mockResponse as any, mockStream as any);
       expect(result).toBe('data');
+    });
+  });
+
+  describe('createCaptureStream', () => {
+    it('should capture markdown text', () => {
+      const inner = { markdown: vi.fn(), progress: vi.fn() };
+      const [proxy, getText] = createCaptureStream(inner as any);
+
+      proxy.markdown('Hello ');
+      proxy.markdown('World');
+
+      expect(getText()).toBe('Hello World');
+      expect(inner.markdown).toHaveBeenCalledTimes(2);
+      expect(inner.markdown).toHaveBeenCalledWith('Hello ');
+      expect(inner.markdown).toHaveBeenCalledWith('World');
+    });
+
+    it('should handle MarkdownString objects', () => {
+      const inner = { markdown: vi.fn() };
+      const [proxy, getText] = createCaptureStream(inner as any);
+
+      proxy.markdown({ value: 'md-content' } as any);
+      expect(getText()).toBe('md-content');
+    });
+
+    it('should return empty string when nothing captured', () => {
+      const inner = { markdown: vi.fn() };
+      const [_proxy, getText] = createCaptureStream(inner as any);
+      expect(getText()).toBe('');
+    });
+
+    it('should proxy non-markdown methods transparently', () => {
+      const inner = { markdown: vi.fn(), progress: vi.fn(), anchor: vi.fn() };
+      const [proxy] = createCaptureStream(inner as any);
+
+      (proxy as any).progress('loading...');
+      expect(inner.progress).toHaveBeenCalledWith('loading...');
     });
   });
 

@@ -109,4 +109,16 @@ describe('ResponseCache', () => {
     const k2 = ResponseCache.makeKey('test', 'docs');
     expect(k1).not.toBe(k2);
   });
+
+  it('should generate different keys for different agents/models', () => {
+    const k1 = ResponseCache.makeKey('test', 'code', 'agent-a');
+    const k2 = ResponseCache.makeKey('test', 'code', 'agent-b');
+    expect(k1).not.toBe(k2);
+  });
+
+  it('should generate different keys with and without agent', () => {
+    const k1 = ResponseCache.makeKey('test', 'code');
+    const k2 = ResponseCache.makeKey('test', 'code', 'my-agent');
+    expect(k1).not.toBe(k2);
+  });
 });

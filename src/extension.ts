@@ -62,6 +62,7 @@ import { ExternalIntegrations } from './integrations';
 import { AgentMarketplace } from './marketplace';
 import { ResponseCache } from './cache';
 import { initI18n, setLocale, Locale } from './i18n';
+import { createCaptureStream } from './utils';
 
 /**
  * Extension entry point.
@@ -564,12 +565,12 @@ export function activate(context: vscode.ExtensionContext) {
       return;
     }
 
-    const _startTime = Date.now();
     let dashId = '';
+    let lastCheckpoint: import('./guardrails').Checkpoint | undefined;
 
     // Cache: check for cached response
     if (cacheEnabled && request.command) {
-      const cacheKey = ResponseCache.makeKey(request.prompt, request.command);
+      const cacheKey = ResponseCache.makeKey(request.prompt, request.command, agent.id);
       const cached = responseCache.get(cacheKey);
       if (cached) {
         stream.markdown(cached);
@@ -594,20 +595,23 @@ export function activate(context: vscode.ExtensionContext) {
         return { metadata: { command: request.command ?? 'default', cancelled: true } };
       }
       if (choice === 'Dry-run') {
-        guardrails.dryRun([{ action: 'run', target: agent.id, detail: request.prompt }]);
+        guardrails.dryRun([{ action: 'run', target: agent.id, detail: request.prompt }], stream);
         stream.markdown('👁️ **Dry-run:** Inga ändringar gjordes. Se output-panelen för detaljer.');
         return { metadata: { command: request.command ?? 'default', dryRun: true } };
       }
     }
 
+    // Starta timer EFTER bekräftelsedialog (exkludera väntetid från telemetri)
+    const _startTime = Date.now();
+
     if (guardrailsEnabled && agent.isAutonomous) {
       if (guardrailsDryRun) {
-        guardrails.dryRun([{ action: 'run', target: agent.id, detail: request.prompt }]);
+        guardrails.dryRun([{ action: 'run', target: agent.id, detail: request.prompt }], stream);
         return { metadata: { command: request.command ?? 'default', dryRun: true } };
       }
       // Skapa checkpoint innan autonomt körning
       try {
-        await guardrails.createCheckpoint(agent.id, `Innan /${agent.id}: ${request.prompt.slice(0, 50)}`, []);
+        lastCheckpoint = await guardrails.createCheckpoint(agent.id, `Innan /${agent.id}: ${request.prompt.slice(0, 50)}`, []);
         if (notificationsEnabled) {
           notifications.notify(
             agent.id,
@@ -659,19 +663,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       // Kör genom middleware-pipeline (timing, rate-limit, usage)
       // Wrap stream to capture agent output for caching
-      let agentResponseText = '';
-      const captureStream = new Proxy(stream, {
-        get(target, prop) {
-          if (prop === 'markdown') {
-            return (value: string | vscode.MarkdownString) => {
-              const text = typeof value === 'string' ? value : value.value;
-              agentResponseText += text;
-              target.markdown(value);
-            };
-          }
-          return Reflect.get(target, prop);
-        },
-      });
+      const [captureStream, getCapturedText] = createCaptureStream(stream);
       const captureCtx: AgentContext = { ...ctx, stream: captureStream };
 
       // Wrap autonoma agenter med progress-notis
@@ -697,6 +689,16 @@ export function activate(context: vscode.ExtensionContext) {
         diffPreview.clear();
       }
 
+      // GuardRails: populera checkpoint med filer som påverkades
+      if (lastCheckpoint && result?.metadata?.filesAffected) {
+        const ws = vscode.workspace.workspaceFolders?.[0];
+        if (ws) {
+          const createdUris = (result.metadata.filesAffected as string[])
+            .map(f => vscode.Uri.joinPath(ws.uri, f));
+          guardrails.markCreated(lastCheckpoint.id, createdUris);
+        }
+      }
+
       // Dashboard: logga slut
       dashboard.logEnd(dashId, true);
 
@@ -710,23 +712,26 @@ export function activate(context: vscode.ExtensionContext) {
       statusBar.updateCache(responseCache.stats);
 
       // Cache: spara lyckat svar för framtida cache-hits
-      // Note: We cache a summary marker — full response caching is not possible
-      // since agent output is streamed directly to the chat UI.
+      const agentResponseText = getCapturedText();
       if (cacheEnabled && request.command && agentResponseText) {
-        const cacheKey = ResponseCache.makeKey(request.prompt, request.command);
+        const cacheKey = ResponseCache.makeKey(request.prompt, request.command, agent.id);
         await responseCache.set(cacheKey, agentResponseText, { agentId: agent.id });
       }
 
-      // Memory: spara kontextsammanfattning för framtida anrop
-      if (agentResponseText) {
-        memory.remember(
-          agent.id,
-          agentResponseText.slice(0, 500),
-          {
-            type: 'context',
-            tags: [request.command ?? 'auto', agent.id],
-          }
-        );
+      // Memory: spara kontextsammanfattning om agenten flaggar det
+      // (undvik att fylla minnet med brus från varje anrop)
+      if (agentResponseText && result?.metadata?.remember !== false) {
+        const minLength = 100;
+        if (agentResponseText.length >= minLength) {
+          memory.remember(
+            agent.id,
+            agentResponseText.slice(0, 500),
+            {
+              type: 'context',
+              tags: [request.command ?? 'auto', agent.id],
+            }
+          );
+        }
       }
 
       // Telemetri: logga framgång

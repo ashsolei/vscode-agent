@@ -67,4 +67,74 @@ describe('GuardRails', () => {
 
     expect(guardrails.listCheckpoints().length).toBeLessThanOrEqual(50);
   });
+
+  describe('dryRun', () => {
+    it('should output to constructor stream by default', () => {
+      guardrails.dryRun([
+        { action: 'create', target: 'file.ts', detail: 'new file' },
+      ]);
+
+      expect(mockStream.markdown).toHaveBeenCalled();
+      const allText = mockStream.markdown.mock.calls.map((c: any) => c[0]).join('');
+      expect(allText).toContain('file.ts');
+      expect(allText).toContain('Dry Run');
+    });
+
+    it('should output to targetStream when provided', () => {
+      const noStreamGuardrails = new GuardRails();
+      const targetStream = { markdown: vi.fn(), progress: vi.fn() };
+
+      noStreamGuardrails.dryRun(
+        [{ action: 'edit', target: 'app.ts' }],
+        targetStream as any
+      );
+
+      expect(targetStream.markdown).toHaveBeenCalled();
+      const allText = targetStream.markdown.mock.calls.map((c: any) => c[0]).join('');
+      expect(allText).toContain('app.ts');
+      expect(allText).toContain('Dry Run');
+    });
+
+    it('should no-op when no stream available', () => {
+      const noStreamGuardrails = new GuardRails();
+      // Should not throw
+      expect(() => {
+        noStreamGuardrails.dryRun([{ action: 'delete', target: 'old.ts' }]);
+      }).not.toThrow();
+    });
+
+    it('should prefer targetStream over constructor stream', () => {
+      const targetStream = { markdown: vi.fn(), progress: vi.fn() };
+
+      guardrails.dryRun(
+        [{ action: 'run', target: 'npm test' }],
+        targetStream as any
+      );
+
+      // targetStream should get the output, not the constructor stream
+      expect(targetStream.markdown).toHaveBeenCalled();
+      // Constructor stream should NOT get dryRun output
+      const constructorCalls = mockStream.markdown.mock.calls.map((c: any) => c[0]).join('');
+      expect(constructorCalls).not.toContain('Dry Run');
+    });
+  });
+
+  describe('markCreated', () => {
+    it('should add uris to checkpoint createdFiles', async () => {
+      const cp = await guardrails.createCheckpoint('agent', 'test', []);
+      const uri1 = { fsPath: '/test/new1.ts', scheme: 'file', path: '/test/new1.ts' };
+      const uri2 = { fsPath: '/test/new2.ts', scheme: 'file', path: '/test/new2.ts' };
+
+      guardrails.markCreated(cp.id, [uri1 as any, uri2 as any]);
+
+      const cps = guardrails.listCheckpoints();
+      expect(cps[0].createdFiles).toHaveLength(2);
+    });
+
+    it('should ignore unknown checkpoint id', () => {
+      expect(() => {
+        guardrails.markCreated('unknown-id', []);
+      }).not.toThrow();
+    });
+  });
 });
