@@ -213,4 +213,279 @@ describe('EventDrivenEngine', () => {
       vi.useRealTimers();
     });
   });
+
+  // ─── matchFile (tested indirectly via activate + save handler) ───
+
+  describe('matchFile & triggerRule (via event handler)', () => {
+    let saveHandler: ((doc: any) => void) | undefined;
+    let createHandler: ((uri: any) => void) | undefined;
+    let deleteHandler: ((uri: any) => void) | undefined;
+
+    beforeEach(async () => {
+      // Override mocks to capture handlers
+      const vsc = await import('vscode');
+      vi.mocked(vsc.workspace.onDidSaveTextDocument).mockImplementation((handler: any) => {
+        saveHandler = handler;
+        return { dispose: vi.fn() };
+      });
+
+      const mockWatcher = {
+        onDidCreate: vi.fn().mockImplementation((handler: any) => {
+          createHandler = handler;
+          return { dispose: vi.fn() };
+        }),
+        onDidDelete: vi.fn().mockImplementation((handler: any) => {
+          deleteHandler = handler;
+          return { dispose: vi.fn() };
+        }),
+        onDidChange: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+        dispose: vi.fn(),
+      };
+      vi.mocked(vsc.workspace.createFileSystemWatcher).mockReturnValue(mockWatcher as any);
+    });
+
+    it('should match **/*.ts pattern against .ts files', async () => {
+      const vsc = await import('vscode');
+      engine.addRule(makeRule({ event: 'onSave', filePattern: '**/*.ts' }));
+      engine.activate();
+
+      saveHandler?.({ uri: { fsPath: '/project/src/file.ts' } });
+
+      expect(vsc.commands.executeCommand).toHaveBeenCalled();
+    });
+
+    it('should NOT match **/*.ts pattern against .js files', async () => {
+      const vsc = await import('vscode');
+      vi.mocked(vsc.commands.executeCommand).mockClear();
+
+      engine.addRule(makeRule({ event: 'onSave', filePattern: '**/*.ts' }));
+      engine.activate();
+
+      saveHandler?.({ uri: { fsPath: '/project/src/file.js' } });
+
+      expect(vsc.commands.executeCommand).not.toHaveBeenCalled();
+    });
+
+    it('should match *.tsx pattern', async () => {
+      const vsc = await import('vscode');
+      vi.mocked(vsc.commands.executeCommand).mockClear();
+
+      engine.addRule(makeRule({ event: 'onSave', filePattern: '*.tsx' }));
+      engine.activate();
+
+      saveHandler?.({ uri: { fsPath: '/project/src/App.tsx' } });
+
+      expect(vsc.commands.executeCommand).toHaveBeenCalled();
+    });
+
+    it('should match substring pattern', async () => {
+      const vsc = await import('vscode');
+      vi.mocked(vsc.commands.executeCommand).mockClear();
+
+      engine.addRule(makeRule({ event: 'onSave', filePattern: 'src/' }));
+      engine.activate();
+
+      saveHandler?.({ uri: { fsPath: '/project/src/index.ts' } });
+
+      expect(vsc.commands.executeCommand).toHaveBeenCalled();
+    });
+
+    it('should match all files when no pattern specified', async () => {
+      const vsc = await import('vscode');
+      vi.mocked(vsc.commands.executeCommand).mockClear();
+
+      engine.addRule(makeRule({ event: 'onSave', filePattern: undefined }));
+      engine.activate();
+
+      saveHandler?.({ uri: { fsPath: '/anything.py' } });
+
+      expect(vsc.commands.executeCommand).toHaveBeenCalled();
+    });
+
+    it('should trigger onFileCreate handler', async () => {
+      const vsc = await import('vscode');
+      vi.mocked(vsc.commands.executeCommand).mockClear();
+
+      engine.addRule(makeRule({ id: 'create-rule', event: 'onFileCreate', filePattern: '**/*.ts' }));
+      engine.activate();
+
+      createHandler?.({ fsPath: '/project/new-file.ts' });
+
+      expect(vsc.commands.executeCommand).toHaveBeenCalled();
+    });
+
+    it('should trigger onFileDelete handler', async () => {
+      const vsc = await import('vscode');
+      vi.mocked(vsc.commands.executeCommand).mockClear();
+
+      engine.addRule(makeRule({ id: 'delete-rule', event: 'onFileDelete', filePattern: '**/*.ts' }));
+      engine.activate();
+
+      deleteHandler?.({ fsPath: '/project/deleted.ts' });
+
+      expect(vsc.commands.executeCommand).toHaveBeenCalled();
+    });
+
+    it('should NOT trigger disabled rules', async () => {
+      const vsc = await import('vscode');
+      vi.mocked(vsc.commands.executeCommand).mockClear();
+
+      engine.addRule(makeRule({ event: 'onSave', enabled: false }));
+      engine.activate();
+
+      saveHandler?.({ uri: { fsPath: '/project/file.ts' } });
+
+      expect(vsc.commands.executeCommand).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── triggerRule cooldown ───
+
+  describe('triggerRule cooldown', () => {
+    let saveHandler: ((doc: any) => void) | undefined;
+
+    beforeEach(async () => {
+      const vsc = await import('vscode');
+      vi.mocked(vsc.workspace.onDidSaveTextDocument).mockImplementation((handler: any) => {
+        saveHandler = handler;
+        return { dispose: vi.fn() };
+      });
+    });
+
+    it('should respect cooldown between triggers', async () => {
+      const vsc = await import('vscode');
+      vi.mocked(vsc.commands.executeCommand).mockClear();
+
+      engine.addRule(makeRule({ event: 'onSave', cooldownMs: 60_000, filePattern: undefined }));
+      engine.activate();
+
+      // First trigger should work
+      saveHandler?.({ uri: { fsPath: '/file.ts' } });
+      expect(vsc.commands.executeCommand).toHaveBeenCalledTimes(1);
+
+      // Second trigger immediately should be blocked by cooldown
+      saveHandler?.({ uri: { fsPath: '/file.ts' } });
+      expect(vsc.commands.executeCommand).toHaveBeenCalledTimes(1); // still 1
+    });
+  });
+
+  // ─── triggerRule prompt expansion ───
+
+  describe('triggerRule prompt expansion', () => {
+    let saveHandler: ((doc: any) => void) | undefined;
+
+    beforeEach(async () => {
+      const vsc = await import('vscode');
+      vi.mocked(vsc.workspace.onDidSaveTextDocument).mockImplementation((handler: any) => {
+        saveHandler = handler;
+        return { dispose: vi.fn() };
+      });
+    });
+
+    it('should expand ${file} in prompt', async () => {
+      const vsc = await import('vscode');
+      vi.mocked(vsc.commands.executeCommand).mockClear();
+
+      engine.addRule(makeRule({
+        event: 'onSave',
+        prompt: 'Fix errors in ${file}',
+        filePattern: undefined,
+        cooldownMs: 0,
+      }));
+      engine.activate();
+
+      saveHandler?.({ uri: { fsPath: '/project/src/app.ts' } });
+
+      expect(vsc.commands.executeCommand).toHaveBeenCalledWith(
+        'workbench.action.chat.open',
+        expect.objectContaining({
+          query: expect.stringContaining('/project/src/app.ts'),
+        })
+      );
+    });
+  });
+
+  // ─── triggerRule agent not found ───
+
+  describe('triggerRule agent not found', () => {
+    let saveHandler: ((doc: any) => void) | undefined;
+
+    beforeEach(async () => {
+      const vsc = await import('vscode');
+      vi.mocked(vsc.workspace.onDidSaveTextDocument).mockImplementation((handler: any) => {
+        saveHandler = handler;
+        return { dispose: vi.fn() };
+      });
+    });
+
+    it('should not crash when agent does not exist', async () => {
+      const vsc = await import('vscode');
+      vi.mocked(vsc.commands.executeCommand).mockClear();
+
+      engine.addRule(makeRule({
+        event: 'onSave',
+        agentId: 'nonexistent-agent',
+        filePattern: undefined,
+        cooldownMs: 0,
+      }));
+      engine.activate();
+
+      // Should not throw
+      expect(() => saveHandler?.({ uri: { fsPath: '/file.ts' } })).not.toThrow();
+      // Should not execute command because agent was not found
+      expect(vsc.commands.executeCommand).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── onDidTrigger event firing ───
+
+  describe('onDidTrigger event fires', () => {
+    let saveHandler: ((doc: any) => void) | undefined;
+
+    beforeEach(async () => {
+      const vsc = await import('vscode');
+      vi.mocked(vsc.workspace.onDidSaveTextDocument).mockImplementation((handler: any) => {
+        saveHandler = handler;
+        return { dispose: vi.fn() };
+      });
+    });
+
+    it('should fire onDidTrigger when rule triggers', () => {
+      const triggerHandler = vi.fn();
+      engine.onDidTrigger(triggerHandler);
+
+      engine.addRule(makeRule({ event: 'onSave', filePattern: undefined, cooldownMs: 0 }));
+      engine.activate();
+
+      saveHandler?.({ uri: { fsPath: '/file.ts' } });
+
+      expect(triggerHandler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ruleId: 'test-rule',
+          agentId: 'autofix',
+          event: 'onSave',
+        })
+      );
+    });
+  });
+
+  // ─── loadRules from memento ───
+
+  describe('loadRules from memento', () => {
+    it('should load existing rules from memento state', () => {
+      const storedRules = [
+        makeRule({ id: 'stored-1' }),
+        makeRule({ id: 'stored-2', agentId: 'security' }),
+      ];
+      const preloadedMemento = createMockMemento();
+      preloadedMemento.get.mockImplementation((key: string, def?: any) => {
+        if (key === 'eventRules') return storedRules;
+        return def;
+      });
+
+      const loadedEngine = new EventDrivenEngine(registry, preloadedMemento);
+      expect(loadedEngine.listRules()).toHaveLength(2);
+      expect(loadedEngine.listRules()[0].id).toBe('stored-1');
+    });
+  });
 });

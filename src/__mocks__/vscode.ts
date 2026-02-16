@@ -77,6 +77,7 @@ export const window = {
     dispose: vi.fn(),
   }),
   createTreeView: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+  showTextDocument: vi.fn().mockResolvedValue(undefined),
   activeTextEditor: undefined,
   withProgress: vi.fn().mockImplementation((_opts: any, task: any) => task({ report: vi.fn() })),
 };

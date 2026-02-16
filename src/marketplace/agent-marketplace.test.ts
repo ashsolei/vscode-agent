@@ -218,6 +218,97 @@ describe('AgentMarketplace', () => {
     });
   });
 
+  describe('rate', () => {
+    it('should update rating with running average', async () => {
+      const vsc = await import('vscode');
+      const agents = marketplace.browse();
+      const target = agents[0];
+      const originalRating = target.rating;
+      const originalCount = target.ratingCount;
+
+      vi.mocked(vsc.window.showQuickPick).mockResolvedValueOnce('⭐⭐⭐⭐⭐ (5)' as any);
+      await marketplace.rate(target.id);
+
+      const updated = marketplace.browse().find(a => a.id === target.id)!;
+      expect(updated.ratingCount).toBe(originalCount + 1);
+      // Running average adjusts toward 5
+      const expectedRating = Math.round(((originalRating * originalCount + 5) / (originalCount + 1)) * 10) / 10;
+      expect(updated.rating).toBe(expectedRating);
+    });
+
+    it('should not crash for nonexistent agent', async () => {
+      await expect(marketplace.rate('nonexistent')).resolves.not.toThrow();
+    });
+
+    it('should handle cancelled picker', async () => {
+      const vsc = await import('vscode');
+      const agents = marketplace.browse();
+      vi.mocked(vsc.window.showQuickPick).mockResolvedValueOnce(undefined as any);
+      await expect(marketplace.rate(agents[0].id)).resolves.not.toThrow();
+    });
+  });
+
+  describe('browse with installed marking', () => {
+    it('should mark installed agents as installed', async () => {
+      const agents = marketplace.browse();
+      await marketplace.install(agents[0].id);
+
+      const refreshed = marketplace.browse();
+      const installed = refreshed.find(a => a.id === agents[0].id);
+      expect(installed!.installed).toBe(true);
+    });
+
+    it('should mark non-installed agents as not installed', async () => {
+      const agents = marketplace.browse();
+      await marketplace.install(agents[0].id);
+
+      const refreshed = marketplace.browse();
+      const notInstalled = refreshed.find(a => a.id !== agents[0].id);
+      expect(notInstalled!.installed).toBe(false);
+    });
+  });
+
+  describe('load from existing state', () => {
+    it('should load installed agents from memento', () => {
+      const state = createMockState();
+      const saved = [{ id: 'regex-helper', version: '1.0.0', installedAt: 1000, pluginData: {} }];
+      (state.get as any).mockImplementation((key: string, def?: any) => {
+        if (key === 'agent.marketplace.installed') return saved;
+        return def;
+      });
+      const mkt = new AgentMarketplace(state as any, vi.fn(), vi.fn());
+      expect(mkt.listInstalled().length).toBe(1);
+      expect(mkt.listInstalled()[0].id).toBe('regex-helper');
+    });
+
+    it('should load custom community agents from memento', () => {
+      const state = createMockState();
+      const custom: MarketplaceAgent[] = [{
+        id: 'mkt-custom',
+        name: 'Custom',
+        description: 'Custom agent',
+        author: 'test',
+        version: '1.0.0',
+        icon: '⚡',
+        tags: ['custom'],
+        downloads: 10,
+        rating: 5,
+        ratingCount: 1,
+        publishedAt: Date.now(),
+        updatedAt: Date.now(),
+        pluginData: { id: 'custom', name: 'Custom' },
+      }];
+      (state.get as any).mockImplementation((key: string, def?: any) => {
+        if (key === 'agent.marketplace.community') return custom;
+        return def;
+      });
+      const mkt = new AgentMarketplace(state as any, vi.fn(), vi.fn());
+      const found = mkt.browse().find(a => a.id === 'mkt-custom');
+      expect(found).toBeDefined();
+      expect(found!.name).toBe('Custom');
+    });
+  });
+
   describe('built-in agents', () => {
     it('should include Regex Helper', () => {
       const agents = marketplace.browse();

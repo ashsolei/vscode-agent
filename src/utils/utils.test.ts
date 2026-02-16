@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { extractTurnText, buildHistory } from './history';
 import { streamResponse, sendChatRequest, createCaptureStream } from './streaming';
+import * as vsc from 'vscode';
 import { ChatResponseTurn, LanguageModelChatMessage } from 'vscode';
 
 describe('history utils', () => {
@@ -51,9 +52,47 @@ describe('history utils', () => {
     });
 
     it('should convert ChatRequestTurn to user message', () => {
-      const context = { history: [] };
+      const turn = new vsc.ChatRequestTurn('Hello agent');
+      const context = {
+        history: [turn],
+      };
       const messages = buildHistory(context as any);
-      expect(messages).toEqual([]);
+      expect(messages).toHaveLength(1);
+      expect(messages[0].content).toBe('Hello agent');
+      expect(messages[0].role).toBe('user');
+    });
+
+    it('should convert ChatResponseTurn to assistant message', () => {
+      const turn = new vsc.ChatResponseTurn('agent');
+      (turn as any).response = [{ value: { value: 'I can help' } }];
+      const context = { history: [turn] };
+      const messages = buildHistory(context as any);
+      expect(messages).toHaveLength(1);
+      expect(messages[0].content).toBe('I can help');
+      expect(messages[0].role).toBe('assistant');
+    });
+
+    it('should handle mixed request and response turns', () => {
+      const responseTurn = new vsc.ChatResponseTurn('agent');
+      (responseTurn as any).response = [{ value: { value: 'Answer' } }];
+      const context = {
+        history: [
+          new vsc.ChatRequestTurn('Question'),
+          responseTurn,
+        ],
+      };
+      const messages = buildHistory(context as any);
+      expect(messages).toHaveLength(2);
+      expect(messages[0].role).toBe('user');
+      expect(messages[1].role).toBe('assistant');
+    });
+
+    it('should skip response turns with empty text', () => {
+      const turn = new vsc.ChatResponseTurn('agent');
+      (turn as any).response = [];
+      const context = { history: [turn] };
+      const messages = buildHistory(context as any);
+      expect(messages).toHaveLength(0);
     });
   });
 });

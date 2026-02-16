@@ -271,6 +271,100 @@ describe('SharedState', () => {
       expect(vscode.workspace.fs.writeFile).not.toHaveBeenCalled();
       noStorageState.dispose();
     });
+
+    it('reloadFromSyncFile uppdaterar cache från annat fönster', async () => {
+      // Capture the watcher change handler
+      let changeHandler: (() => void) | undefined;
+      vi.clearAllMocks();
+      vi.mocked(vscode.workspace.createFileSystemWatcher).mockImplementation(() => {
+        const mock = {
+          onDidChange: vi.fn().mockImplementation((handler: any) => {
+            changeHandler = handler;
+            return { dispose: vi.fn() };
+          }),
+          onDidCreate: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+          onDidDelete: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+          dispose: vi.fn(),
+        };
+        return mock as any;
+      });
+
+      const syncState = new SharedState(createMockMemento() as any, storageUri);
+
+      // Simulate another window writing to sync file
+      const otherWindowData = JSON.stringify({
+        windowId: 'other-win',
+        changedKey: 'fromOther',
+        timestamp: Date.now(),
+        state: { fromOther: 'hello', extra: 42 },
+      });
+      vi.mocked(vscode.workspace.fs.readFile).mockResolvedValue(
+        new TextEncoder().encode(otherWindowData)
+      );
+
+      const listener = vi.fn();
+      syncState.onDidChange(listener);
+
+      // Trigger the watcher change
+      await changeHandler!();
+
+      expect(syncState.get('fromOther')).toBe('hello');
+      expect(syncState.get('extra')).toBe(42);
+      expect(listener).toHaveBeenCalledWith({ key: 'fromOther', value: 'hello' });
+      syncState.dispose();
+    });
+
+    it('reloadFromSyncFile ignorerar egna ändringar', async () => {
+      let changeHandler: (() => void) | undefined;
+      vi.clearAllMocks();
+      vi.mocked(vscode.workspace.createFileSystemWatcher).mockImplementation(() => ({
+        onDidChange: vi.fn().mockImplementation((handler: any) => {
+          changeHandler = handler;
+          return { dispose: vi.fn() };
+        }),
+        onDidCreate: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+        onDidDelete: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+        dispose: vi.fn(),
+      } as any));
+
+      const syncState = new SharedState(createMockMemento() as any, storageUri);
+
+      // Sync file from same window — should be ignored
+      const sameWindowData = JSON.stringify({
+        windowId: syncState.windowId,
+        changedKey: 'self',
+        timestamp: Date.now(),
+        state: { self: 'ignored' },
+      });
+      vi.mocked(vscode.workspace.fs.readFile).mockResolvedValue(
+        new TextEncoder().encode(sameWindowData)
+      );
+
+      await changeHandler!();
+
+      expect(syncState.get('self')).toBeUndefined();
+      syncState.dispose();
+    });
+
+    it('reloadFromSyncFile hanterar läsfel utan krasch', async () => {
+      let changeHandler: (() => void) | undefined;
+      vi.clearAllMocks();
+      vi.mocked(vscode.workspace.createFileSystemWatcher).mockImplementation(() => ({
+        onDidChange: vi.fn().mockImplementation((handler: any) => {
+          changeHandler = handler;
+          return { dispose: vi.fn() };
+        }),
+        onDidCreate: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+        onDidDelete: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+        dispose: vi.fn(),
+      } as any));
+
+      const syncState = new SharedState(createMockMemento() as any, storageUri);
+      vi.mocked(vscode.workspace.fs.readFile).mockRejectedValue(new Error('File not found'));
+
+      await expect(changeHandler!()).resolves.not.toThrow();
+      syncState.dispose();
+    });
   });
 
   // ─── Dispose ───

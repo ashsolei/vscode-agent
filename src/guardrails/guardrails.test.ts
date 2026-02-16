@@ -12,6 +12,9 @@ vi.mock('vscode', () => ({
       delete: vi.fn().mockResolvedValue(undefined),
     },
   },
+  window: {
+    showWarningMessage: vi.fn().mockResolvedValue(undefined),
+  },
   Uri: {
     joinPath: vi.fn((_base: any, path: string) => ({
       fsPath: `/test/${path}`,
@@ -135,6 +138,191 @@ describe('GuardRails', () => {
       expect(() => {
         guardrails.markCreated('unknown-id', []);
       }).not.toThrow();
+    });
+  });
+
+  // ─── Rollback ─── 
+
+  describe('rollback', () => {
+    it('should restore files from snapshots', async () => {
+      const { workspace } = await import('vscode');
+      const cp = await guardrails.createCheckpoint('agent', 'before edit', ['file.ts']);
+      
+      const result = await guardrails.rollback(cp.id);
+      
+      expect(result.restoredFiles).toBe(1);
+      expect(workspace.fs.writeFile).toHaveBeenCalled();
+    });
+
+    it('should delete created files', async () => {
+      const { workspace } = await import('vscode');
+      const cp = await guardrails.createCheckpoint('agent', 'before create', []);
+      const newUri = { fsPath: '/test/new.ts', scheme: 'file', path: '/test/new.ts' };
+      guardrails.markCreated(cp.id, [newUri as any]);
+
+      const result = await guardrails.rollback(cp.id);
+
+      expect(result.deletedFiles).toBe(1);
+      expect(workspace.fs.delete).toHaveBeenCalledWith(newUri);
+    });
+
+    it('should handle both restore and delete together', async () => {
+      const cp = await guardrails.createCheckpoint('agent', 'mixed', ['existing.ts']);
+      const newUri = { fsPath: '/test/created.ts', scheme: 'file', path: '/test/created.ts' };
+      guardrails.markCreated(cp.id, [newUri as any]);
+
+      const result = await guardrails.rollback(cp.id);
+      
+      expect(result.restoredFiles).toBe(1);
+      expect(result.deletedFiles).toBe(1);
+    });
+
+    it('should throw for unknown checkpoint id', async () => {
+      await expect(guardrails.rollback('unknown')).rejects.toThrow('hittades inte');
+    });
+
+    it('should log errors on write failure and continue', async () => {
+      const { workspace } = await import('vscode');
+      vi.mocked(workspace.fs.writeFile).mockRejectedValueOnce(new Error('Permission denied'));
+
+      const cp = await guardrails.createCheckpoint('agent', 'will fail', ['locked.ts']);
+      const result = await guardrails.rollback(cp.id);
+
+      expect(result.restoredFiles).toBe(0);
+      expect(mockStream.markdown).toHaveBeenCalledWith(expect.stringContaining('Kunde inte återställa'));
+    });
+
+    it('should log errors on delete failure and continue', async () => {
+      const { workspace } = await import('vscode');
+      vi.mocked(workspace.fs.delete).mockRejectedValueOnce(new Error('Not found'));
+
+      const cp = await guardrails.createCheckpoint('agent', 'will fail delete', []);
+      const deleteUri = { fsPath: '/test/gone.ts', scheme: 'file', path: '/test/gone.ts' };
+      guardrails.markCreated(cp.id, [deleteUri as any]);
+
+      const result = await guardrails.rollback(cp.id);
+
+      expect(result.deletedFiles).toBe(0);
+      expect(mockStream.markdown).toHaveBeenCalledWith(expect.stringContaining('Kunde inte ta bort'));
+    });
+
+    it('should report summary after rollback', async () => {
+      const cp = await guardrails.createCheckpoint('agent', 'summary test', ['a.ts']);
+      await guardrails.rollback(cp.id);
+      
+      expect(mockStream.markdown).toHaveBeenCalledWith(expect.stringContaining('Rollback klar'));
+    });
+  });
+
+  // ─── Undo ───
+
+  describe('undo', () => {
+    it('should rollback the latest checkpoint and remove it', async () => {
+      await guardrails.createCheckpoint('agent', 'first', ['a.ts']);
+      await guardrails.createCheckpoint('agent', 'second', ['b.ts']);
+
+      const result = await guardrails.undo();
+      
+      expect(result).not.toBeNull();
+      expect(result!.restoredFiles).toBe(1);
+      expect(guardrails.listCheckpoints()).toHaveLength(1);
+      expect(guardrails.listCheckpoints()[0].description).toBe('first');
+    });
+
+    it('should return null when no checkpoints', async () => {
+      const result = await guardrails.undo();
+      expect(result).toBeNull();
+    });
+
+    it('should allow multiple undo calls', async () => {
+      await guardrails.createCheckpoint('agent', 'cp1', []);
+      await guardrails.createCheckpoint('agent', 'cp2', []);
+
+      await guardrails.undo();
+      expect(guardrails.listCheckpoints()).toHaveLength(1);
+      
+      await guardrails.undo();
+      expect(guardrails.listCheckpoints()).toHaveLength(0);
+      
+      const result = await guardrails.undo();
+      expect(result).toBeNull();
+    });
+  });
+
+  // ─── confirmDestructive ───
+
+  describe('confirmDestructive', () => {
+    it('should return true when user confirms', async () => {
+      const { window } = await import('vscode');
+      vi.mocked(window.showWarningMessage).mockResolvedValueOnce('Tillåt' as any);
+
+      const result = await guardrails.confirmDestructive('Delete files', ['file1.ts', 'file2.ts']);
+      
+      expect(result).toBe(true);
+      expect(window.showWarningMessage).toHaveBeenCalledWith(
+        expect.stringContaining('Delete files'),
+        expect.objectContaining({ modal: true }),
+        'Tillåt',
+        'Avbryt'
+      );
+    });
+
+    it('should return false when user cancels', async () => {
+      const { window } = await import('vscode');
+      vi.mocked(window.showWarningMessage).mockResolvedValueOnce('Avbryt' as any);
+
+      const result = await guardrails.confirmDestructive('Dangerous action', ['detail']);
+      expect(result).toBe(false);
+    });
+
+    it('should return false when user dismisses dialog', async () => {
+      const { window } = await import('vscode');
+      vi.mocked(window.showWarningMessage).mockResolvedValueOnce(undefined as any);
+
+      const result = await guardrails.confirmDestructive('Action', ['detail']);
+      expect(result).toBe(false);
+    });
+
+    it('should truncate details list at 10 items', async () => {
+      const { window } = await import('vscode');
+      vi.mocked(window.showWarningMessage).mockResolvedValueOnce('Tillåt' as any);
+
+      const details = Array.from({ length: 15 }, (_, i) => `file${i}.ts`);
+      await guardrails.confirmDestructive('Mass delete', details);
+
+      const calls = vi.mocked(window.showWarningMessage).mock.calls;
+      const call = calls[calls.length - 1];
+      const detail = (call[1] as any).detail;
+      expect(detail).toContain('och 5 till');
+    });
+  });
+
+  // ─── clearCheckpoints ───
+
+  describe('clearCheckpoints', () => {
+    it('should remove all checkpoints', async () => {
+      await guardrails.createCheckpoint('a', 'cp1', []);
+      await guardrails.createCheckpoint('b', 'cp2', []);
+      expect(guardrails.listCheckpoints()).toHaveLength(2);
+      
+      guardrails.clearCheckpoints();
+      expect(guardrails.listCheckpoints()).toHaveLength(0);
+    });
+  });
+
+  // ─── Dispose ───
+
+  describe('dispose', () => {
+    it('should clear checkpoints and stream', async () => {
+      await guardrails.createCheckpoint('agent', 'test', []);
+      guardrails.dispose();
+      
+      expect(guardrails.listCheckpoints()).toHaveLength(0);
+    });
+
+    it('should not throw on double dispose', () => {
+      guardrails.dispose();
+      expect(() => guardrails.dispose()).not.toThrow();
     });
   });
 });

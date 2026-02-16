@@ -393,4 +393,79 @@ describe('PluginLoader', () => {
       expect(vscode.window.showWarningMessage).toHaveBeenCalledTimes(1);
     });
   });
+
+  // ─── handleFileChange (create/modify) ───────
+
+  describe('handleFileChange', () => {
+    it('ska ladda om plugin och visa infomeddelande vid filändring', async () => {
+      const def = makePluginDef({ id: 'hot-reload', name: 'Hot Reload' });
+      const uri = vscode.Uri.file('/workspace/.agent-plugins/hot-reload.json');
+
+      // Setup watcher to capture handlers
+      let createHandler: ((uri: vscode.Uri) => void) | undefined;
+      let changeHandler: ((uri: vscode.Uri) => void) | undefined;
+      const mockWatcher = {
+        onDidCreate: vi.fn().mockImplementation((handler: any) => {
+          createHandler = handler;
+          return { dispose: vi.fn() };
+        }),
+        onDidChange: vi.fn().mockImplementation((handler: any) => {
+          changeHandler = handler;
+          return { dispose: vi.fn() };
+        }),
+        onDidDelete: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+        dispose: vi.fn(),
+      };
+      vi.mocked(vscode.workspace.createFileSystemWatcher).mockReturnValue(mockWatcher as any);
+      vi.mocked(vscode.workspace.findFiles).mockResolvedValue([]);
+
+      await loader.activate();
+
+      // Now simulate a file create
+      vi.mocked(vscode.workspace.fs.readFile).mockResolvedValue(encodeJson(def));
+      await createHandler!(uri);
+
+      expect(registerCallback).toHaveBeenCalled();
+      expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+        expect.stringContaining('Hot Reload')
+      );
+    });
+
+    it('ska trigga onDidChangePlugins vid filändring', async () => {
+      const def = makePluginDef({ id: 'changed', name: 'Changed' });
+      const uri = vscode.Uri.file('/workspace/.agent-plugins/changed.json');
+
+      let changeHandler: ((uri: vscode.Uri) => void) | undefined;
+      const mockWatcher = {
+        onDidCreate: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+        onDidChange: vi.fn().mockImplementation((handler: any) => {
+          changeHandler = handler;
+          return { dispose: vi.fn() };
+        }),
+        onDidDelete: vi.fn().mockReturnValue({ dispose: vi.fn() }),
+        dispose: vi.fn(),
+      };
+      vi.mocked(vscode.workspace.createFileSystemWatcher).mockReturnValue(mockWatcher as any);
+      vi.mocked(vscode.workspace.findFiles).mockResolvedValue([]);
+
+      const listener = vi.fn();
+      loader.onDidChangePlugins(listener);
+
+      await loader.activate();
+
+      vi.mocked(vscode.workspace.fs.readFile).mockResolvedValue(encodeJson(def));
+      await changeHandler!(uri);
+
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ─── PluginAgent: template variables ────────
+
+  describe('PluginAgent', () => {
+    it('ska exporteras så att PluginAgent kan användas externt', async () => {
+      const { PluginAgent } = await import('./plugin-loader');
+      expect(PluginAgent).toBeDefined();
+    });
+  });
 });

@@ -183,4 +183,93 @@ describe('AgentProfileManager', () => {
   it('should clean up on dispose', () => {
     expect(() => manager.dispose()).not.toThrow();
   });
+
+  // ─── remove active profile ───
+
+  it('should deactivate when removing the active profile', async () => {
+    await manager.create({
+      id: 'temp',
+      name: 'Temp',
+      icon: '🗑️',
+      description: 'Temp',
+      agents: ['code'],
+    });
+    await manager.activate('temp');
+    expect(manager.active?.id).toBe('temp');
+
+    await manager.remove('temp');
+    expect(manager.active).toBeUndefined();
+  });
+
+  it('should return false when removing non-existent profile', async () => {
+    const removed = await manager.remove('does-not-exist');
+    expect(removed).toBe(false);
+  });
+
+  // ─── duplicate unknown ───
+
+  it('should return undefined when duplicating unknown profile', async () => {
+    const copy = await manager.duplicate('nonexistent', 'new-id', 'New');
+    expect(copy).toBeUndefined();
+  });
+
+  // ─── load from memento ───
+
+  it('should load custom profiles from memento', () => {
+    const m = createMockMemento();
+    const store: Record<string, any> = {
+      'agent.profiles': [{ id: 'saved', name: 'Saved', icon: '💾', description: 'Test', agents: ['code'] }],
+      'agent.activeProfile': 'saved',
+    };
+    m.get = vi.fn((key: string, def?: any) => store[key] ?? def);
+
+    const mgr = new AgentProfileManager(m);
+    const list = mgr.list();
+    expect(list.map((p) => p.id)).toContain('saved');
+    expect(mgr.active?.id).toBe('saved');
+    mgr.dispose();
+  });
+
+  // ─── export profile ───
+
+  it('should export profile to document', async () => {
+    const vsc = await import('vscode');
+    await manager.exportProfile('frontend');
+    expect(vsc.workspace.openTextDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ language: 'json' })
+    );
+  });
+
+  it('should not crash when exporting non-existent profile', async () => {
+    await expect(manager.exportProfile('nonexistent')).resolves.not.toThrow();
+  });
+
+  // ─── create duplicate id ───
+
+  it('should overwrite profile with same id on create', async () => {
+    await manager.create({
+      id: 'dup',
+      name: 'First',
+      icon: '1️⃣',
+      description: 'First',
+      agents: ['code'],
+    });
+    await manager.create({
+      id: 'dup',
+      name: 'Second',
+      icon: '2️⃣',
+      description: 'Second',
+      agents: ['test'],
+    });
+    const found = manager.list().find((p) => p.id === 'dup');
+    expect(found?.name).toBe('Second');
+    expect(found?.agents).toEqual(['test']);
+  });
+
+  // ─── dispose ───
+
+  it('should handle double dispose safely', () => {
+    manager.dispose();
+    expect(() => manager.dispose()).not.toThrow();
+  });
 });
